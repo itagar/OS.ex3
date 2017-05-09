@@ -341,7 +341,7 @@ public:
         // For each filename, Emit each instance of it according to the size
         // of it's values vector, if the size is n then this file name appeared
         // n times during the Search process.
-        for (int i = 0; i < vals.size(); ++i)
+        for (unsigned int i = 0; i < vals.size(); ++i)
         {
             k3Search *currentK3 = new k3Search(currentFileName);  // TODO: new might fail.
             Emit3(currentK3, nullptr);
@@ -422,7 +422,7 @@ bool sortPairs(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
  * @brief produce the output results of the Search process to the user.
  * @param output The output vector obtained by the MapReduce Framework.
  */
-void outputProcedure(const OUT_ITEMS_VEC &output)
+void outputProcedure(OUT_ITEMS_VEC &output)
 {
     // Sort the output vector according to alphabet order.
     std::sort(output.begin(), output.end(), sortPairs);
@@ -446,7 +446,7 @@ void outputProcedure(const OUT_ITEMS_VEC &output)
  * @param output The output vector which contains pointers to allocated objects
  *        of K3 and V3 pairs.
  */
-void freeResources(const IN_ITEMS_VEC &input, const OUT_ITEMS_VEC &output)
+void freeResources(IN_ITEMS_VEC &input, OUT_ITEMS_VEC &output)
 {
     // Free all resources for objects in the Input Vector.
     for (auto i = input.begin(); i != input.end(); ++i)
@@ -505,7 +505,7 @@ int main(int argc, char* argv[])
         }
 
         // Perform the MapReduce Process.
-        output = RunMapReduceFramework(mapReduceSearch, input, 1, true);
+        output = RunMapReduceFramework(mapReduceSearch, input, 5, true);
 
         // Output to the Standard Output the results.
         outputProcedure(output);

@@ -1,26 +1,29 @@
 CXX= g++
-CXXFLAGS= -c -Wall -std=c++11 -DNDEBUG
-CODEFILES= ex2.tar uthreads.cpp Thread.h Thread.cpp Makefile README
-LIBOBJECTS= uthreads.o Thread.o
+CXXFLAGS= -c -Wall -std=c++11 -pthread -DNDEBUG
+CODEFILES= ex3.tar Search.cpp MapReduceFramework.cpp Makefile README
+LIBOBJECTS= MapReduceFramework.o
 
 
 # Default
-default: uthreads
+default: MapReduceFramework Search
 
 
 # Executables
-uthreads: uthreads.o Thread.o
-	ar rcs libuthreads.a $(LIBOBJECTS)
-	-rm -vf *.o
+MapReduceFramework: MapReduceFramework.o
+	ar rcs MapReduceFramework.a $(LIBOBJECTS)
+	-rm -f *.o
+
+Search: MapReduceFramework Search.o
+	$(CXX) Search.o -L. MapReduceFramework.a -lpthread -o Search
+	-rm -f *.o
 
 
 # Object Files
-Thread.o: Thread.h Thread.cpp
-	$(CXX) $(CXXFLAGS) Thread.cpp -o Thread.o
+Search.o: MapReduceFramework.h MapReduceClient.h Search.cpp
+	$(CXX) $(CXXFLAGS) Search.cpp -o Search.o
 	
-
-uthreads.o: uthreads.cpp uthreads.h Thread.h
-	$(CXX) $(CXXFLAGS) uthreads.cpp -o uthreads.o
+MapReduceFramework.o: MapReduceFramework.h MapReduceFramework.cpp
+	$(CXX) $(CXXFLAGS) MapReduceFramework.cpp -o MapReduceFramework.o
 
 
 # tar
@@ -30,6 +33,6 @@ tar:
 
 # Other Targets
 clean:
-	-rm -vf *.o *.a *.tar
+	-rm -vf *.o *.a *.tar Search
 
 	
