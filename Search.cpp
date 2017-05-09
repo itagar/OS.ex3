@@ -1,10 +1,7 @@
 // TODO: Valgrind
 // TODO: README
 // TODO: Makefile
-// TODO: Check dynamic cast return values/exceptions.
-// TODO: What to do in dynamic cast failures.
-// TODO: Check new return values/exceptions.
-
+// TODO: Check 'new' failure.
 /**
  * @file Search.cpp
  * @author Itai Tagar <itagar>
@@ -50,10 +47,10 @@
 #define DIRECTORY_START_INDEX 2
 
 /**
-* @def USAGE_ERROR_MESSAGE "Usage: <substring to search> <folders, separated by space>"
+* @def USAGE_MSG "Usage: <substring to search> <folders, separated by space>"
 * @brief A Macro that sets the error message when the usage is invalid.
 */
-#define USAGE_ERROR_MESSAGE "Usage: <substring to search> <folders, separated by space>"
+#define USAGE_MSG "Usage: <substring to search> <folders, separated by space>"
 
 /**
 * @def SELF_DIRECTORY_NAME "."
@@ -291,12 +288,12 @@ public:
      * @param key The K1 object which in this case is a directory name.
      * @param val The V1 object which in this case is a substring.
      */
-    void Map(const k1Base *const key, const v1Base *const val) const override {
+    void Map(const k1Base *const key, const v1Base *const val) const override
+    {
         // Perform Down-Casting for K1 and V1 in order to use Map with the
         // proper Search program objects.
         const k1Search *currentKey = dynamic_cast<const k1Search * const>(key);
         const v1Search *currentVal = dynamic_cast<const v1Search * const>(val);
-
         assert(currentKey != nullptr && currentVal != nullptr);
 
         // The vector which will contain all the files in this directory.
@@ -316,8 +313,7 @@ public:
             if (currentFileName.find(substring) != std::string::npos)
             {
                 // If the file name contains the substring to search.
-                k2Search *currentK2 = new k2Search(currentFileName);
-                // TODO: new might fail.
+                k2Search *currentK2 = new k2Search(currentFileName);  // TODO: new might fail.
                 Emit2(currentK2, nullptr);
             }
         }
@@ -338,7 +334,6 @@ public:
         // Perform Down-Casting for K2 to use Reduce with the
         // proper Search program objects.
         const k2Search *currentKey = dynamic_cast<const k2Search * const>(key);
-
         assert(currentKey != nullptr);
 
         fileName_t currentFileName = currentKey->getFileName();
@@ -348,8 +343,7 @@ public:
         // n times during the Search process.
         for (int i = 0; i < vals.size(); ++i)
         {
-            k3Search *currentK3 = new k3Search(currentFileName);
-            // TODO: new might fail.
+            k3Search *currentK3 = new k3Search(currentFileName);  // TODO: new might fail.
             Emit3(currentK3, nullptr);
         }
     }
@@ -365,8 +359,8 @@ private:
      */
     void _setupFiles(dirName_t const directory, filesVector &files) const
     {
-        DIR *pDir = nullptr;
-        struct dirent *pEnt = nullptr;
+        DIR *pDir = NULL;
+        struct dirent *pEnt = NULL;
         pDir = opendir(directory.c_str());  // Open Directory Stream.
         if (pDir != NULL)
         {
@@ -405,8 +399,8 @@ void checkArguments(int const argc)
 {
     if (argc <= EMPTY_ARGUMENTS)
     {
-        std::cerr << USAGE_ERROR_MESSAGE << std::endl;
-        exit(EXIT_FAILURE);  // TODO: Check this exit and it's value.
+        std::cerr << USAGE_MSG << std::endl;
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -437,8 +431,10 @@ void outputProcedure(const OUT_ITEMS_VEC &output)
     for (auto i = output.begin(); i != output.end(); ++i)
     {
         k3Search *currentK3 = dynamic_cast<k3Search *>(i->first);
-        assert(currentK3 != nullptr);
+
         std::cout << (i == output.begin() ? EMPTY_CHAR : WHITE_SPACE);
+
+        assert(currentK3 != nullptr);
         std::cout << currentK3->getFileName();
     }
 }
@@ -504,6 +500,7 @@ int main(int argc, char* argv[])
             // Create the Input Pair which holds a pointer to the current K1 of the
             // directory name and a pointer to V1 of the substring to search and
             // store it in the Input Vector.
+            assert(currentV1 != nullptr && currentK1 != nullptr);
             input.push_back(std::make_pair(currentK1, currentV1));
         }
 
@@ -515,7 +512,6 @@ int main(int argc, char* argv[])
 
         // Free all resources.
         freeResources(input, output);
-
         return EXIT_SUCCESS;
     }
     catch (std::bad_alloc &badAllocException)
