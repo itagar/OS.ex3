@@ -2,6 +2,8 @@
 // TODO: README
 // TODO: Makefile
 // TODO: Check 'new' failure.
+// TODO: Check if the Output is empty.
+
 /**
  * @file Search.cpp
  * @author Itai Tagar <itagar>
