@@ -5,6 +5,9 @@
 // TODO: Destroy all threads, mutex, semaphores.
 // TODO: Free memory of k2,v2.
 // TODO: SET CHUNK SIZE TO 10.
+// TODO: Create MapThread and ReduceThread.
+// TODO: Check Destructors for the Threads.
+
 
 /**
  * @file MapReduceFramework.cpp
@@ -119,8 +122,10 @@ typedef std::vector<v2Base*> V2Vector;
  */
 typedef std::map<k2Base*, V2Vector> SHUFFLE_ITEMS;
 
-// TODO: Delete This.
-pthread_mutex_t printMutex = PTHREAD_MUTEX_INITIALIZER;
+/**
+ * @brief Type Definition for the Threads routine pointer.
+ */
+typedef void *(*threadRoutine)(void *);
 
 
 /*-----=  Shared Data  =-----*/
@@ -172,6 +177,11 @@ unsigned int currentInputIndex = INITIAL_INPUT_INDEX;
  *        This iterator shared by the Reduce Threads.
  */
 auto currentShuffleIterator = shuffleItems.begin();
+
+/**
+ * @brief The flag which indicates autoDeleteV2K2 status given to the Framework.
+ */
+bool autoDeleteV2K2Flag;
 
 
 /*-----=  Mutex & Semaphore  =-----*/
@@ -234,12 +244,6 @@ static void *execMap(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
-    // TODO: Delete This.
-    pthread_t currentThread = pthread_self();
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Spawn Map: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
     // Attempt to read Chunk of input and perform Map.
     while (true)
     {
@@ -261,6 +265,7 @@ static void *execMap(void *arg)
         {
             // Before exiting this Thread it is necessary to change it's flag
             // of 'isDone' to be true.
+            pthread_t currentThread = pthread_self();
             for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
             {
                 if (currentThread == *(i->getThread()))
@@ -299,12 +304,6 @@ static void *shuffle(void *arg)
     }
     pthread_t currentThread = pthread_self();
 
-    // TODO: Delete This.
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Spawn Shuffle: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
-    // TODO: Each time it takes only one item, maybe can take more.
     while (true)
     {
         // Wait for items to work with.
@@ -346,7 +345,7 @@ static void *shuffle(void *arg)
                     errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
                 }
 
-                // TODO: Attempt to get ALL the items of this Thread and clear it's vector.
+                // TODO: try get ALL items of this Thread and clear it's vector.
                 MAP_ITEM item = std::make_pair(i->getMapItems().back().first,
                                                i->getMapItems().back().second);
                 i->getMapItems().pop_back();
@@ -357,8 +356,16 @@ static void *shuffle(void *arg)
                     errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
                 }
 
-                // TODO: Perform the shuffle.
+                if (autoDeleteV2K2Flag)
+                {
+                    // TODO: Free the item resources.
+                    // Free the item resources.
+                }
+
+                // The Shuffle.
                 shuffleItems[item.first].push_back(item.second);
+
+
             }
         }
     }
@@ -431,11 +438,21 @@ static void *execReduce(void *arg)
     }
 }
 
-// TODO: Doxygen.
-static void setupMapThreads(int const multiThreadLevel)
+/**
+ * @brief Spawn the Threads in the given Threads Vector by creating them with
+ *        the given routine. The amount of created Threads is as given
+ *        by the multiThreadLevel. In addition, if the spawnShuffle flag is
+ *        true then we also need to create the shuffle Thread.
+ * @param threads The Threads Vector.
+ * @param multiThreadLevel The number of Threads to spawn.
+ * @param routine The start routine of the Threads.
+ * @param spawnShuffle A flag to determine if shuffle Thread need to be created.
+ */
+static void setupThreads(ThreadsVector& threads, int const multiThreadLevel,
+                         threadRoutine routine, bool const spawnShuffle)
 {
     // Initialize the size of the Threads Vector to the given number of Threads.
-    mapThreads = ThreadsVector((unsigned long) multiThreadLevel);
+    threads = ThreadsVector((unsigned long) multiThreadLevel);
 
     // Lock a Mutex in order to make a barrier for the Threads execution
     // and halt their progress until all Threads are created.
@@ -445,51 +462,24 @@ static void setupMapThreads(int const multiThreadLevel)
     }
 
     // Create Threads.
-    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
+    for (auto i = threads.begin(); i != threads.end(); ++i)
     {
-        if (pthread_create(i->getThread(), NULL, execMap, NULL))
+        if (pthread_create(i->getThread(), NULL, routine, NULL))
         {
             errorProcedure(PTHREAD_CREATE_NAME);
         }
     }
 
-    // Shuffle Thread creation and Semaphore initialization.
-    if (pthread_create(shuffleThread.getThread(), NULL, shuffle, NULL))
+    if (spawnShuffle)
     {
-        errorProcedure(PTHREAD_CREATE_NAME);
-    }
-    if (sem_init(&shuffleSemaphore, false, 1))
-    {
-        errorProcedure(SEM_INIT_NAME);
-    }
-
-    // Thread creation is done. Now the Threads can start run.
-    if (pthread_mutex_unlock(&threadSpawnMutex))
-    {
-        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
-    }
-}
-
-// TODO: Doxygen.
-// TODO: Check if can combine the 2 setup functions.
-static void setupReduceThreads(int const multiThreadLevel)
-{
-    // Initialize the size of the Threads Vector to the given number of Threads.
-    reduceThreads = ThreadsVector((unsigned long) multiThreadLevel);
-
-    // Lock a Mutex in order to make a barrier for the Threads execution
-    // and halt their progress until all Threads are created.
-    if (pthread_mutex_lock(&threadSpawnMutex))
-    {
-        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
-    }
-
-    // Create Threads.
-    for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
-    {
-        if (pthread_create(i->getThread(), NULL, execReduce, NULL))
+        // Shuffle Thread creation and Semaphore initialization.
+        if (pthread_create(shuffleThread.getThread(), NULL, shuffle, NULL))
         {
             errorProcedure(PTHREAD_CREATE_NAME);
+        }
+        if (sem_init(&shuffleSemaphore, false, 1))
+        {
+            errorProcedure(SEM_INIT_NAME);
         }
     }
 
@@ -511,11 +501,6 @@ void Emit2(k2Base* k2, v2Base* v2)
 {
     // Search for the current Thread Object.
     pthread_t currentThread = pthread_self();
-
-    // TODO: Delete This.
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Emit2: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
 
     for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
     {
@@ -553,10 +538,19 @@ void Emit2(k2Base* k2, v2Base* v2)
 // TODO: Doxygen.
 void Emit3(k3Base*, v3Base*)
 {
-    std::cerr << "EMIT3" << std::endl;
+
 }
 
-// TODO: Doxygen.
+/**
+ * @brief Run the MapReduce Framework on the given input with the given
+ *        MapReduce implementation.
+ * @param mapReduce The MapReduce object which holds MapReduce implementation.
+ * @param itemsVec The input to perform Map & Reduce on.
+ * @param multiThreadLevel The number of Threads to work with.
+ * @param autoDeleteV2K2 A flag indicates if the K2V2 items resources should
+ *                       be freed by the Framework.
+ * @return Output Items Vector with the result of the MapReduce sorted.
+ */
 OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
                                     IN_ITEMS_VEC& itemsVec,
                                     int multiThreadLevel,
@@ -564,7 +558,10 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
 {
     mapReduceDriver = &mapReduce;  // Set the MapReduce specific implementation.
     inputItems = itemsVec;  // Set the Input Items.
-    setupMapThreads(multiThreadLevel);  // Spawn Threads for Map.
+    autoDeleteV2K2Flag = autoDeleteV2K2;  // Set the auto delete flag.
+
+    // Spawn Threads for Map.
+    setupThreads(mapThreads, multiThreadLevel, execMap, true);
 
     // Join the Map Threads.
     for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
@@ -581,7 +578,8 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         errorProcedure(PTHREAD_JOIN_NAME);
     }
 
-    setupReduceThreads(multiThreadLevel);  // Spawn Threads for Reduce.
+    // Spawn Threads for Reduce.
+    setupThreads(reduceThreads, multiThreadLevel, execReduce, false);
 
     // Join the Reduce Threads.
     for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
@@ -591,8 +589,6 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
             errorProcedure(PTHREAD_JOIN_NAME);
         }
     }
-
-    // TODO: Check Destructors for the Threads.
 
     return outputItems;
 }
