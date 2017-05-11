@@ -157,6 +157,11 @@ IN_ITEMS_VEC inputItems;
 SHUFFLE_ITEMS shuffleItems;
 
 /**
+ * @brief The shared Vector of the result output.
+ */
+OUT_ITEMS_VEC outputItems;
+
+/**
  * @brief The shared index in the input items.
  *        This index shared by the Map Threads.
  */
@@ -359,7 +364,6 @@ static void *shuffle(void *arg)
     }
 }
 
-// TODO: Implement this.
 /**
  * @brief The function which execute the Reduce procedure by each Thread.
  */
@@ -377,39 +381,39 @@ static void *execReduce(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
-    pthread_t currentThread = pthread_self();
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Spawn Reduce: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
     // Attempt to read Chunk of input and perform Reduce.
     while (true)
     {
-        auto curIterator = shuffleItems.begin();  // Holds the current iterator value.
-
-        // Attempt to gain access to the shared index of the current input.
-        // If the access gained, we store the value of the index and update it.
+        // Attempt to gain access to the shared iterator of the shuffle items.
+        // If the access gained, we store the value of the iterator and update.
         if (pthread_mutex_lock(&shuffleIteratorMutex))
         {
             errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
         }
-        curIterator = currentShuffleIterator;
+        auto startIterator = currentShuffleIterator;
         for (int i = 0; i < REDUCE_CHUNK; ++i)
         {
-            currentShuffleIterator++;
+            // Update the shared iterator by the Chunk size. If the Chunk size
+            // is greater then the number of remaining items we stop at the
+            // end of shuffleItems.
+            if (currentShuffleIterator != shuffleItems.end())
+            {
+                currentShuffleIterator++;
+            }
         }
+        auto endIterator = currentShuffleIterator;
         if (pthread_mutex_unlock(&shuffleIteratorMutex))
         {
             errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
         }
 
         // If the input is empty.
-        if (curIterator != shuffleItems.end())
+        if (startIterator == shuffleItems.end())
         {
             // Before exiting this Thread it is necessary to change it's flag
             // of 'isDone' to be true.
             pthread_t currentThread = pthread_self();
-            for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
+            for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
             {
                 if (currentThread == *(i->getThread()))
                 {
@@ -419,12 +423,10 @@ static void *execReduce(void *arg)
             }
         }
 
-        // Perform Map on the input chunk. If the chunk size is greater then the
-        // remaining input items then we perform Map on all the remaining items.
-        for (int i = 0; curIterator != shuffleItems.end() && i < REDUCE_CHUNK;
-             ++curIterator, ++i)
+        // Perform Reduce on the shuffle chunk.
+        for ( ; startIterator != endIterator; ++startIterator)
         {
-            mapReduceDriver->Reduce(curIterator->first, curIterator->second);
+            mapReduceDriver->Reduce(startIterator->first, startIterator->second);
         }
     }
 }
@@ -560,71 +562,37 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
                                     int multiThreadLevel,
                                     bool autoDeleteV2K2)
 {
-    // TODO: Delete This.
-    pthread_t currentThread = pthread_self();
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Main: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
-
     mapReduceDriver = &mapReduce;  // Set the MapReduce specific implementation.
     inputItems = itemsVec;  // Set the Input Items.
-    setupMapThreads(multiThreadLevel);  // Spawn Threads for Map procedure.
+    setupMapThreads(multiThreadLevel);  // Spawn Threads for Map.
 
     // Join the Map Threads.
-//    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
-//    {
-//        if (pthread_join(*(i->getThread()), NULL))
-//        {
-//            errorProcedure(PTHREAD_JOIN_NAME);
-//        }
-//        i->~Thread();  // TODO: Check This.
-//    }
-//
-//    // Join the Shuffle Thread.
-//    if (pthread_join(*(shuffleThread.getThread()), NULL))
-//    {
-//        errorProcedure(PTHREAD_JOIN_NAME);
-//    }
-//    shuffleThread.~Thread();  // TODO: Check This.
-
-
-    int k = 0;
-    while (k < 250000000)
+    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
     {
-        if (k % 1000000000 == 0)
+        if (pthread_join(*(i->getThread()), NULL))
         {
-            pthread_mutex_lock(&printMutex);
-            std::cerr << "Main: " << currentThread << std::endl;
-            pthread_mutex_unlock(&printMutex);
+            errorProcedure(PTHREAD_JOIN_NAME);
         }
-        k++;
     }
 
-    currentThread = pthread_self();
-
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Main: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
-
-
-    setupReduceThreads(multiThreadLevel);
-
-
-    k = 0;
-    while (k < 2500000000)
+    // Join the Shuffle Thread.
+    if (pthread_join(*(shuffleThread.getThread()), NULL))
     {
-        if (k % 1000000000 == 0)
-        {
-            pthread_mutex_lock(&printMutex);
-            std::cerr << "Main: " << currentThread << std::endl;
-            pthread_mutex_unlock(&printMutex);
-        }
-        k++;
+        errorProcedure(PTHREAD_JOIN_NAME);
     }
 
-    OUT_ITEMS_VEC outputItems;  // The final vector to return.
+    setupReduceThreads(multiThreadLevel);  // Spawn Threads for Reduce.
+
+    // Join the Reduce Threads.
+    for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
+    {
+        if (pthread_join(*(i->getThread()), NULL))
+        {
+            errorProcedure(PTHREAD_JOIN_NAME);
+        }
+    }
+
+    // TODO: Check Destructors for the Threads.
 
     return outputItems;
 }
