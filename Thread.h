@@ -59,14 +59,43 @@ public:
      * @brief Gets the pointer for the thread represented by this Class.
      * @return Pointer to pthread_t of the thread represented by this Class.
      */
-    pthread_t *get_thread() const { return _thread; };
+    pthread_t *getThread() const { return _thread; };
+
+    /**
+     * @brief Gets the Map Mutex.
+     * @return The Map Mutex.
+     */
+    pthread_mutex_t getMapMutex() const { return _mapMutex; };
+
+    /**
+     * @brief Get access to MapItems Vector of this Thread.
+     * @return MapItems Vector of this Thread.
+     */
+    MAP_ITEMS_VEC getMapItems() { return _mapItems; };
 
     /**
      * @brief Inserts the given item produced during the Map procedure into
      *        this Threads MapItems Vector.
      * @param mapItem The item to insert.
      */
-    void insertItem(MAP_ITEM& mapItem);
+    void insertItem(const MAP_ITEM &mapItem);
+
+    /**
+     * @brief Return the empty status of the MapItems Vector.
+     * @return true if empty, false otherwise.
+     */
+    bool isItemsEmpty() const { return _mapItems.empty(); };
+
+    /**
+     * @brief Get the value of isDone.
+     * @return The value of isDone.
+     */
+    bool isDone() const { return _isDone; };
+
+    /**
+     * @brief Mark that this Thread job is done by setting isDone to true.
+     */
+    void markDone() { _isDone = true; };
 
 private:
 
@@ -84,6 +113,11 @@ private:
      * @brief Mutex for the MapItems Vector.
      */
     pthread_mutex_t _mapMutex;
+
+    /**
+     * @brief A flag which determine if this Thread job is done.
+     */
+    bool _isDone;
 };
 
 
