@@ -35,20 +35,37 @@ typedef std::vector<MAP_ITEM> MAP_ITEMS_VEC;
 /*-----=  Class Declaration  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief A Class representing a Thread in the Framework which wrap the
+ *        pthread_t object and holding some more useful data in order
+ *        to maintain the Framework flow more easily. Each Thread holds the
+ *        items it produced while running Map procedure.
+ */
 class Thread
 {
 public:
-    // TODO: Doxygen.
+
+    /**
+     * @brief The Constructor for the Thread Class.
+     */
     Thread();
 
-    // TODO: Doxygen.
+    /**
+     * @brief The Destructor for the Thread Class.
+     */
     ~Thread();
 
-    // TODO: Doxygen.
+    /**
+     * @brief Gets the pointer for the thread represented by this Class.
+     * @return Pointer to pthread_t of the thread represented by this Class.
+     */
     pthread_t *get_thread() const { return _thread; };
 
-    // TODO: Doxygen.
+    /**
+     * @brief Inserts the given item produced during the Map procedure into
+     *        this Threads MapItems Vector.
+     * @param mapItem The item to insert.
+     */
     void insertItem(MAP_ITEM& mapItem);
 
 private:
@@ -58,9 +75,15 @@ private:
      */
     pthread_t *_thread;
 
-    // TODO: Doxygen.
+    /**
+     * @brief A Vector of items which produced by this Thread while using Map.
+     */
     MAP_ITEMS_VEC _mapItems;
 
+    /**
+     * @brief Mutex for the MapItems Vector.
+     */
+    pthread_mutex_t _mapMutex;
 };
 
 

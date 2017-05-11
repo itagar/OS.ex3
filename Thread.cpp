@@ -15,15 +15,20 @@
 /*-----=  Constructors & Destructors  =-----*/
 
 
-// TODO: Doxygen.
-Thread::Thread() : _thread(new pthread_t)
+/**
+ * @brief The Constructor for the Thread Class.
+ */
+Thread::Thread() : _thread(new pthread_t), _mapMutex(PTHREAD_MUTEX_INITIALIZER)
 {
 
 }
 
-// TODO: Doxygen.
+/**
+ * @brief The Destructor for the Thread Class.
+ */
 Thread::~Thread()
 {
+    pthread_mutex_destroy(&_mapMutex);
     delete _thread;
 }
 
@@ -31,7 +36,11 @@ Thread::~Thread()
 /*-----=  Class Functions Implementation  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief Inserts the given item produced during the Map procedure into
+ *        this Threads MapItems Vector.
+ * @param mapItem The item to insert.
+ */
 void Thread::insertItem(MAP_ITEM &mapItem)
 {
     _mapItems.push_back(mapItem);

@@ -123,10 +123,10 @@ IN_ITEMS_VEC inputItems;
 
 
 // TODO: Doxygen.
-pthread_mutex_t threadSpawnMutex = PTHREAD_MUTEX_INITIALIZER;  // TODO: Maybe pthread_mutex_init?
+pthread_mutex_t threadSpawnMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // TODO: Doxygen.
-pthread_mutex_t inputIndexMutex = PTHREAD_MUTEX_INITIALIZER;  // TODO: Maybe pthread_mutex_init?
+pthread_mutex_t inputIndexMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // TODO: Doxygen.
 sem_t shuffleSemaphore;
@@ -181,7 +181,6 @@ static void *execMap(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
-    // TODO: Check this.
     // If the input is empty.
     if (startIndex >= inputItems.size())
     {
@@ -195,7 +194,7 @@ static void *execMap(void *arg)
         mapReduceDriver->Map(inputItems[i].first, inputItems[i].second);
     }
 
-    pthread_exit(nullptr);  // TODO: Check return value here.
+    pthread_exit(nullptr);
 }
 
 // TODO: Doxygen.
