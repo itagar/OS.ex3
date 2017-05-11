@@ -4,6 +4,7 @@
 // TODO: Implement Log File.
 // TODO: Destroy all threads, mutex, semaphores.
 // TODO: Free memory of k2,v2.
+// TODO: SET CHUNK SIZE TO 10.
 
 /**
  * @file MapReduceFramework.cpp
@@ -38,7 +39,7 @@
 * @brief A Macro that sets the chunk size that the ExecMap will be applied.
 */
 #define MAP_CHUNK 2
-// TODO : CHUNK SIZE
+
 /**
 * @def REDUCE_CHUNK_SIZE 10
 * @brief A Macro that sets the chunk size that the ExecReduce will be applied.
@@ -108,59 +109,87 @@
  */
 typedef std::vector<Thread> ThreadsVector;
 
-// TODO: Doxygen.
+/**
+ * @brief Type Definition for the Vector of pointers to V2 objects.
+ */
 typedef std::vector<v2Base*> V2Vector;
 
-// TODO: Doxygen.
+/**
+ * @brief Type Definition for the map of Shuffle items.
+ */
 typedef std::map<k2Base*, V2Vector> SHUFFLE_ITEMS;
 
-
-// TODO: DELETE
+// TODO: Delete This.
 pthread_mutex_t printMutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 /*-----=  Shared Data  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief The Vector of Threads used for the Map.
+ */
 ThreadsVector mapThreads;
 
-// TODO: Doxygen.
+/**
+ * @brief The Thread used for the Shuffle.
+ */
 Thread shuffleThread;
 
-// TODO: Doxygen.
+/**
+ * @brief The Vector of Threads used for the Reduce.
+ */
 ThreadsVector reduceThreads;
 
-// TODO: Doxygen.
-// TODO: Give a better name for this variable.
+/**
+ * @brief The MapReduce Driver which holds the implementation for the MapReduce.
+ */
 MapReduceBase *mapReduceDriver;
 
-// TODO: Doxygen.
+/**
+ * @brief The shared Vector of the given input.
+ */
 IN_ITEMS_VEC inputItems;
 
-// TODO: Doxygen.
+/**
+ * @brief The shared Map of the shuffle output.
+ */
 SHUFFLE_ITEMS shuffleItems;
 
-// TODO: Doxygen.
+/**
+ * @brief The shared index in the input items.
+ *        This index shared by the Map Threads.
+ */
 unsigned int currentInputIndex = INITIAL_INPUT_INDEX;
 
-// TODO: Doxygen.
+/**
+ * @brief The shared iterator in the shuffle items.
+ *        This iterator shared by the Reduce Threads.
+ */
 auto currentShuffleIterator = shuffleItems.begin();
 
 
 /*-----=  Mutex & Semaphore  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief Mutex for Spawn Threads.
+ */
 pthread_mutex_t threadSpawnMutex = PTHREAD_MUTEX_INITIALIZER;
 
-// TODO: Doxygen.
+/**
+ * @brief Mutex for accessing the Input Items.
+ */
 pthread_mutex_t inputIndexMutex = PTHREAD_MUTEX_INITIALIZER;
 
-// TODO: Doxygen.
+/**
+ * @brief Mutex for accessing the Shuffle Items.
+ */
 pthread_mutex_t shuffleIteratorMutex = PTHREAD_MUTEX_INITIALIZER;
 
-// TODO: Doxygen.
+/**
+ * @brief Semaphore for the Shuffle and the Map Threads workflow.
+ */
 sem_t shuffleSemaphore;
 
 
@@ -183,7 +212,9 @@ static void errorProcedure(const char *functionName)
 /*-----=  Threads Functions  =-----*/
 
 
-// TODO: Doxygen.
+/**
+ * @brief The function which execute the Map procedure by each Thread.
+ */
 static void *execMap(void *arg)
 {
     // Lock a Mutex in order to make a barrier for the Threads execution
@@ -198,6 +229,7 @@ static void *execMap(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
+    // TODO: Delete This.
     pthread_t currentThread = pthread_self();
     pthread_mutex_lock(&printMutex);
     std::cerr << "Spawn Map: " << currentThread << std::endl;
@@ -206,15 +238,13 @@ static void *execMap(void *arg)
     // Attempt to read Chunk of input and perform Map.
     while (true)
     {
-        unsigned int startIndex;  // Holds the current index value.
-
         // Attempt to gain access to the shared index of the current input.
         // If the access gained, we store the value of the index and update it.
         if (pthread_mutex_lock(&inputIndexMutex))
         {
             errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
         }
-        startIndex = currentInputIndex;
+        unsigned int startIndex = currentInputIndex;
         currentInputIndex += MAP_CHUNK;
         if (pthread_mutex_unlock(&inputIndexMutex))
         {
@@ -226,7 +256,6 @@ static void *execMap(void *arg)
         {
             // Before exiting this Thread it is necessary to change it's flag
             // of 'isDone' to be true.
-            pthread_t currentThread = pthread_self();
             for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
             {
                 if (currentThread == *(i->getThread()))
@@ -246,7 +275,10 @@ static void *execMap(void *arg)
     }
 }
 
-// TODO: Doxygen.
+// TODO: Implement this.
+/**
+ * @brief The function which execute the Map procedure by a single Thread.
+ */
 static void *shuffle(void *arg)
 {
     // Lock a Mutex in order to make a barrier for the Threads execution
@@ -262,6 +294,7 @@ static void *shuffle(void *arg)
     }
     pthread_t currentThread = pthread_self();
 
+    // TODO: Delete This.
     pthread_mutex_lock(&printMutex);
     std::cerr << "Spawn Shuffle: " << currentThread << std::endl;
     pthread_mutex_unlock(&printMutex);
@@ -326,7 +359,10 @@ static void *shuffle(void *arg)
     }
 }
 
-// TODO: Doxygen.
+// TODO: Implement this.
+/**
+ * @brief The function which execute the Reduce procedure by each Thread.
+ */
 static void *execReduce(void *arg)
 {
     // Lock a Mutex in order to make a barrier for the Threads execution
@@ -474,6 +510,7 @@ void Emit2(k2Base* k2, v2Base* v2)
     // Search for the current Thread Object.
     pthread_t currentThread = pthread_self();
 
+    // TODO: Delete This.
     pthread_mutex_lock(&printMutex);
     std::cerr << "Emit2: " << currentThread << std::endl;
     pthread_mutex_unlock(&printMutex);
@@ -511,8 +548,6 @@ void Emit2(k2Base* k2, v2Base* v2)
     }
 }
 
-
-
 // TODO: Doxygen.
 void Emit3(k3Base*, v3Base*)
 {
@@ -525,8 +560,8 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
                                     int multiThreadLevel,
                                     bool autoDeleteV2K2)
 {
+    // TODO: Delete This.
     pthread_t currentThread = pthread_self();
-
     pthread_mutex_lock(&printMutex);
     std::cerr << "Main: " << currentThread << std::endl;
     pthread_mutex_unlock(&printMutex);
