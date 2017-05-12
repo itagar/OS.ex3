@@ -1,7 +1,7 @@
 CXX= g++
 CXXFLAGS= -c -Wall -std=c++11 -pthread -DNDEBUG
 CODEFILES= ex3.tar Search.cpp MapReduceFramework.cpp Makefile README
-LIBOBJECTS= MapReduceFramework.o Thread.o
+LIBOBJECTS= MapReduceFramework.o Thread.o MapThread.o ReduceThread.o
 
 
 # Default
@@ -9,7 +9,7 @@ default: MapReduceFramework Search
 
 
 # Executables
-MapReduceFramework: MapReduceFramework.o Thread.o
+MapReduceFramework: MapReduceFramework.o Thread.o MapThread.o ReduceThread.o
 	ar rcs MapReduceFramework.a $(LIBOBJECTS)
 	-rm -f *.o
 
@@ -24,8 +24,14 @@ Search.o: MapReduceFramework.h MapReduceClient.h Search.cpp
 
 Thread.o: Thread.h MapReduceFramework.h Thread.cpp
 	$(CXX) $(CXXFLAGS) Thread.cpp -o Thread.o
+
+MapThread.o: Thread.h MapThread.h MapThread.cpp
+	$(CXX) $(CXXFLAGS) MapThread.cpp -o MapThread.o
 	
-MapReduceFramework.o: MapReduceFramework.h Thread.h MapReduceFramework.cpp
+ReduceThread.o: Thread.h ReduceThread.h ReduceThread.cpp
+	$(CXX) $(CXXFLAGS) ReduceThread.cpp -o ReduceThread.o
+
+MapReduceFramework.o: MapReduceFramework.h Thread.h MapThread.h ReduceThread.h MapReduceFramework.cpp
 	$(CXX) $(CXXFLAGS) MapReduceFramework.cpp -o MapReduceFramework.o
 
 

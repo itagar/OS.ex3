@@ -18,8 +18,7 @@
 /**
  * @brief The Constructor for the Thread Class.
  */
-Thread::Thread() : _thread(new pthread_t), _mapMutex(PTHREAD_MUTEX_INITIALIZER),
-                   _isDone(false)
+Thread::Thread() : _thread(new pthread_t), _isDone(false)
 {
 
 }
@@ -29,20 +28,6 @@ Thread::Thread() : _thread(new pthread_t), _mapMutex(PTHREAD_MUTEX_INITIALIZER),
  */
 Thread::~Thread()
 {
-    pthread_mutex_destroy(&_mapMutex);
     delete _thread;
-}
-
-
-/*-----=  Class Functions Implementation  =-----*/
-
-
-/**
- * @brief Inserts the given item produced during the Map procedure into
- *        this Threads MapItems Vector.
- * @param mapItem The item to insert.
- */
-void Thread::insertItem(const MAP_ITEM &mapItem)
-{
-    _mapItems.push_back(mapItem);
+    _thread = nullptr;
 }

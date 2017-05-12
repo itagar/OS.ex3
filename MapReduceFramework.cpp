@@ -3,9 +3,8 @@
 // TODO: Makefile
 // TODO: Implement Log File.
 // TODO: Destroy all threads, mutex, semaphores.
-// TODO: Free memory of k2,v2.
+// TODO: Free memory of k2,v2 when auto delete.
 // TODO: SET CHUNK SIZE TO 10.
-// TODO: Create MapThread and ReduceThread.
 // TODO: Check Destructors for the Threads.
 
 
@@ -24,8 +23,12 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <map>
+#include <algorithm>
+#include <cassert>
 #include "MapReduceFramework.h"
 #include "Thread.h"
+#include "MapThread.h"
+#include "ReduceThread.h"
 
 
 /*-----=  Definitions  =-----*/
@@ -68,6 +71,12 @@
 #define PTHREAD_CREATE_NAME "pthread_create"
 
 /**
+* @def PTHREAD_JOIN_NAME "pthread_join"
+* @brief A Macro that sets function name for pthread_join.
+*/
+#define PTHREAD_JOIN_NAME "pthread_join"
+
+/**
 * @def PTHREAD_MUTEX_LOCK_NAME "pthread_mutex_lock"
 * @brief A Macro that sets function name for pthread_mutex_lock.
 */
@@ -80,10 +89,10 @@
 #define PTHREAD_MUTEX_UNLOCK_NAME "pthread_mutex_unlock"
 
 /**
-* @def PTHREAD_JOIN_NAME "pthread_join"
-* @brief A Macro that sets function name for pthread_join.
+* @def PTHREAD_MUTEX_DESTROY_NAME "pthread_mutex_destroy"
+* @brief A Macro that sets function name for pthread_mutex_destroy.
 */
-#define PTHREAD_JOIN_NAME "pthread_join"
+#define PTHREAD_MUTEX_DESTROY_NAME "pthread_mutex_destroy"
 
 /**
 * @def SEM_INIT_NAME "sem_init"
@@ -103,14 +112,25 @@
 */
 #define SEM_POST_NAME "sem_post"
 
+/**
+* @def SEM_DESTROY_NAME "sem_destroy"
+* @brief A Macro that sets function name for sem_destroy.
+*/
+#define SEM_DESTROY_NAME "sem_destroy"
+
 
 /*-----=  Type Definitions  =-----*/
 
 
 /**
- * @brief Type Definition for the Vector of Threads.
+ * @brief Type Definition for the Vector of MapThread.
  */
-typedef std::vector<Thread> ThreadsVector;
+typedef std::vector<MapThread> MapThreadsVector;
+
+/**
+ * @brief Type Definition for the Vector of ReduceThread.
+ */
+typedef std::vector<ReduceThread> ReduceThreadsVector;
 
 /**
  * @brief Type Definition for the Vector of pointers to V2 objects.
@@ -134,7 +154,7 @@ typedef void *(*threadRoutine)(void *);
 /**
  * @brief The Vector of Threads used for the Map.
  */
-ThreadsVector mapThreads;
+MapThreadsVector mapThreads;
 
 /**
  * @brief The Thread used for the Shuffle.
@@ -144,7 +164,7 @@ Thread shuffleThread;
 /**
  * @brief The Vector of Threads used for the Reduce.
  */
-ThreadsVector reduceThreads;
+ReduceThreadsVector reduceThreads;
 
 /**
  * @brief The MapReduce Driver which holds the implementation for the MapReduce.
@@ -160,11 +180,6 @@ IN_ITEMS_VEC inputItems;
  * @brief The shared Map of the shuffle output.
  */
 SHUFFLE_ITEMS shuffleItems;
-
-/**
- * @brief The shared Vector of the result output.
- */
-OUT_ITEMS_VEC outputItems;
 
 /**
  * @brief The shared index in the input items.
@@ -439,20 +454,32 @@ static void *execReduce(void *arg)
 }
 
 /**
- * @brief Spawn the Threads in the given Threads Vector by creating them with
- *        the given routine. The amount of created Threads is as given
- *        by the multiThreadLevel. In addition, if the spawnShuffle flag is
- *        true then we also need to create the shuffle Thread.
- * @param threads The Threads Vector.
+ * @brief Spawn the Shuffle Thread by creating it with the given routine.
+ * @param routine The start routine of the Threads.
+ */
+static void setupShuffleThread(threadRoutine routine)
+{
+    // Shuffle Thread creation and Semaphore initialization.
+    if (pthread_create(shuffleThread.getThread(), NULL, routine, NULL))
+    {
+        errorProcedure(PTHREAD_CREATE_NAME);
+    }
+    if (sem_init(&shuffleSemaphore, false, 1))
+    {
+        errorProcedure(SEM_INIT_NAME);
+    }
+}
+
+/**
+ * @brief Spawn the MapThreads by creating them with the given routine.
+ *        The amount of created Threads is as given by the multiThreadLevel.
  * @param multiThreadLevel The number of Threads to spawn.
  * @param routine The start routine of the Threads.
- * @param spawnShuffle A flag to determine if shuffle Thread need to be created.
  */
-static void setupThreads(ThreadsVector& threads, int const multiThreadLevel,
-                         threadRoutine routine, bool const spawnShuffle)
+static void setupMapThreads(int const multiThreadLevel, threadRoutine routine)
 {
     // Initialize the size of the Threads Vector to the given number of Threads.
-    threads = ThreadsVector((unsigned long) multiThreadLevel);
+    mapThreads = MapThreadsVector((unsigned long) multiThreadLevel);
 
     // Lock a Mutex in order to make a barrier for the Threads execution
     // and halt their progress until all Threads are created.
@@ -462,7 +489,7 @@ static void setupThreads(ThreadsVector& threads, int const multiThreadLevel,
     }
 
     // Create Threads.
-    for (auto i = threads.begin(); i != threads.end(); ++i)
+    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
     {
         if (pthread_create(i->getThread(), NULL, routine, NULL))
         {
@@ -470,16 +497,40 @@ static void setupThreads(ThreadsVector& threads, int const multiThreadLevel,
         }
     }
 
-    if (spawnShuffle)
+    // Create Shuffle Thread.
+    setupShuffleThread(shuffle);
+
+    // Thread creation is done. Now the Threads can start run.
+    if (pthread_mutex_unlock(&threadSpawnMutex))
     {
-        // Shuffle Thread creation and Semaphore initialization.
-        if (pthread_create(shuffleThread.getThread(), NULL, shuffle, NULL))
+        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+    }
+}
+
+/**
+ * @brief Spawn the ReduceThreads by creating them with the given routine.
+ *        The amount of created Threads is as given by the multiThreadLevel.
+ * @param multiThreadLevel The number of Threads to spawn.
+ * @param routine The start routine of the Threads.
+ */
+static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine)
+{
+    // Initialize the size of the Threads Vector to the given number of Threads.
+    reduceThreads = ReduceThreadsVector((unsigned long) multiThreadLevel);
+
+    // Lock a Mutex in order to make a barrier for the Threads execution
+    // and halt their progress until all Threads are created.
+    if (pthread_mutex_lock(&threadSpawnMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+    }
+
+    // Create Threads.
+    for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
+    {
+        if (pthread_create(i->getThread(), NULL, routine, NULL))
         {
             errorProcedure(PTHREAD_CREATE_NAME);
-        }
-        if (sem_init(&shuffleSemaphore, false, 1))
-        {
-            errorProcedure(SEM_INIT_NAME);
         }
     }
 
@@ -491,13 +542,93 @@ static void setupThreads(ThreadsVector& threads, int const multiThreadLevel,
 }
 
 /**
+ * @brief Comparator for sorting two pairs of type OUT_ITEM.
+ *        The comparison is done by comparing the Key values of each
+ *        pair, i.e. by comparing K3 values.
+ * @param lhs The first pair to compare.
+ * @param rhs The second pair to compare.
+ * @return true if lhs is smaller then rhs, false otherwise.
+ */
+bool sortPairs(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
+{
+    assert(lhs.first != nullptr && rhs.first != nullptr);
+    return *(lhs.first) < *(rhs.first);
+}
+
+/**
+ * @brief Absorb all the items from the given source and append it into the
+ *        given destination.
+ * @param dest The destination Vector.
+ * @param src The source Vector.
+ */
+static void absorbItems(OUT_ITEMS_VEC& dest, const OUT_ITEMS_VEC& src)
+{
+    dest.insert(dest.end(), src.begin(), src.end());
+}
+
+/**
+ * @brief Create and finalize the final output of the Framework.
+ *        This function receive all the output items from all of the Reduce
+ *        Threads and merge it together into one final Vector. In addition
+ *        it sorts the final Vector by alphabet order.
+ * @return OUT_ITEMS_VEC holds the final output of the Framework sorted.
+ */
+static OUT_ITEMS_VEC finalizeOutput()
+{
+    OUT_ITEMS_VEC outputItems;  // The final output.
+
+    // Insert all the data from each ReduceThread container and merge
+    // it into the final output.
+    for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
+    {
+        absorbItems(outputItems, i->getReduceItems());
+    }
+
+    // Sort the output according to alphabet order.
+    std::sort(outputItems.begin(), outputItems.end(), sortPairs);
+    return outputItems;
+}
+
+/**
+ * @brief Destroy all the Mutex created during the Framework.
+ */
+static void destroyAllMutex()
+{
+    if (pthread_mutex_destroy(&threadSpawnMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_DESTROY_NAME);
+    }
+
+    if (pthread_mutex_destroy(&inputIndexMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_DESTROY_NAME);
+    }
+
+    if (pthread_mutex_destroy(&shuffleIteratorMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_DESTROY_NAME);
+    }
+}
+
+/**
+ * @brief Destroy all the Semaphores created during the Framework.
+ */
+static void destroyAllSemaphores()
+{
+    if (sem_destroy(&shuffleSemaphore))
+    {
+        errorProcedure(SEM_DESTROY_NAME);
+    }
+}
+
+/**
  * @brief This function is called by the Map function in order to add a new
  *        pair of K2,V2 values. The function track the Thread which called it
  *        and find it's corresponding MapItems Vector to insert the given pair.
  * @param k2 The K2 value of the pair to add.
  * @param v2 The V2 value of the pair to add.
  */
-void Emit2(k2Base* k2, v2Base* v2)
+void Emit2(k2Base *k2, v2Base *v2)
 {
     // Search for the current Thread Object.
     pthread_t currentThread = pthread_self();
@@ -535,10 +666,28 @@ void Emit2(k2Base* k2, v2Base* v2)
     }
 }
 
-// TODO: Doxygen.
-void Emit3(k3Base*, v3Base*)
+/**
+ * @brief This function is called by the Reduce function in order to add a new
+ *        pair of K3,V3 values. The function track the Thread which called it
+ *        and find it's corresponding ReduceItems Vector to insert the pair.
+ * @param k3 The K3 value of the pair to add.
+ * @param v3 The V3 value of the pair to add.
+ */
+void Emit3(k3Base *k3, v3Base *v3)
 {
+    // Search for the current Thread Object.
+    pthread_t currentThread = pthread_self();
 
+    for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
+    {
+        if (currentThread == *(i->getThread()))
+        {
+            // Insert to this Thread the current values of the Reduce procedure.
+            OUT_ITEM reduceItem = std::make_pair(k3, v3);
+            i->insertItem(reduceItem);
+            return;
+        }
+    }
 }
 
 /**
@@ -561,7 +710,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     autoDeleteV2K2Flag = autoDeleteV2K2;  // Set the auto delete flag.
 
     // Spawn Threads for Map.
-    setupThreads(mapThreads, multiThreadLevel, execMap, true);
+    setupMapThreads(multiThreadLevel, execMap);
 
     // Join the Map Threads.
     for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
@@ -579,7 +728,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     }
 
     // Spawn Threads for Reduce.
-    setupThreads(reduceThreads, multiThreadLevel, execReduce, false);
+    setupReduceThreads(multiThreadLevel, execReduce);
 
     // Join the Reduce Threads.
     for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
@@ -590,5 +739,13 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         }
     }
 
-    return outputItems;
+    OUT_ITEMS_VEC frameworkOutput = finalizeOutput();
+
+    // Release all Resources.
+    destroyAllMutex();
+    destroyAllSemaphores();
+    // TODO: Release resources of k2, v2.
+    // TODO: Release resources of Threads.
+
+    return frameworkOutput;
 }

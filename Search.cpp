@@ -108,7 +108,6 @@ typedef std::vector<fileName_t> filesVector;
 class k1Search : public k1Base
 {
 public:
-
     /**
      * @brief A Constructor for the K1 Class.
      * @param directoryName The current directory representing this K1 object.
@@ -140,7 +139,6 @@ public:
     dirName_t getDirectoryName() const { return _directoryName; };
 
 private:
-
     /**
      * @brief The directory name associated with this K1 object.
      */
@@ -154,7 +152,6 @@ private:
 class v1Search : public v1Base
 {
 public:
-
     /**
      * @brief A Constructor for the V1 Class.
      * @param substring The given substring to search.
@@ -173,7 +170,6 @@ public:
     std::string getSubstring() const { return _substring; };
 
 private:
-
     /**
      * @brief The substring to search associated with this V1 object.
      */
@@ -188,7 +184,6 @@ private:
 class k2Search : public k2Base
 {
 public:
-
     /**
      * @brief A Constructor for the K2 Class.
      * @param fileName The current file name representing this K2 object.
@@ -220,7 +215,6 @@ public:
     fileName_t getFileName() const { return _fileName; };
 
 private:
-
     /**
      * @brief The file name associated with this K2 object.
      */
@@ -235,7 +229,6 @@ private:
 class k3Search : public k3Base
 {
 public:
-
     /**
      * @brief A Constructor for the K3 Class.
      * @param fileName The current file name representing this K3 object.
@@ -267,7 +260,6 @@ public:
     fileName_t getFileName() const { return _fileName; };
 
 private:
-
     /**
      * @brief The file name associated with this K3 object.
      */
@@ -280,7 +272,6 @@ private:
 class MapReduceSearch : public MapReduceBase
 {
 public:
-
     /**
      * @brief The Map function. It takes a key and value where key is the
      *        directory name and value is the substring to search.
@@ -351,7 +342,6 @@ public:
     }
 
 private:
-
     /**
      * @brief Setup the files vector with all the files in the given directory.
      *        if the given directory is empty or is not a directory, the vector
@@ -407,14 +397,14 @@ void checkArguments(int const argc)
 }
 
 /**
- * @brief Comparator for sorting two pairs of type OUT_ITEM.
+ * @brief Comparator for sorting two pairs of OUT_ITEM in the Search program.
  *        The comparison is done by comparing the Key values of each
  *        pair, i.e. by comparing K3 values.
  * @param lhs The first pair to compare.
  * @param rhs The second pair to compare.
  * @return true if lhs is smaller then rhs, false otherwise.
  */
-bool sortPairs(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
+bool SearchPairSort(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
 {
     assert(lhs.first != nullptr && rhs.first != nullptr);
     return *(lhs.first) < *(rhs.first);
@@ -427,7 +417,7 @@ bool sortPairs(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
 void outputProcedure(OUT_ITEMS_VEC &output)
 {
     // Sort the output vector according to alphabet order.
-    std::sort(output.begin(), output.end(), sortPairs);
+    std::sort(output.begin(), output.end(), SearchPairSort);
 
     // Print all the files of the result output.
     for (auto i = output.begin(); i != output.end(); ++i)
