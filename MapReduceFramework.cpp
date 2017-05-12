@@ -10,6 +10,7 @@
 // TODO: Split to helper functions.
 // TODO: Shuffle + free resources.
 // TODO: Check empty input.
+// TODO: Every once in a while there is a deadlock or seg fault. check this.
 
 /**
  * @file MapReduceFramework.cpp

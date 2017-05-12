@@ -487,7 +487,6 @@ int main(int argc, char* argv[])
         // create a matching V1 object associated with this substring.
         assert(argc > SUBSTRING_ARGUMENT_INDEX);
         const std::string substring = argv[SUBSTRING_ARGUMENT_INDEX];
-        v1Search *currentV1 = new v1Search(substring);
 
         // Iterate the given arguments which represent directories to search in.
         for (int i = DIRECTORY_START_INDEX; i < argc; ++i)
@@ -495,6 +494,7 @@ int main(int argc, char* argv[])
             // Create a K1 object representing the current directory.
             dirName_t currentDirectory = argv[i];
             k1Search *currentK1 = new k1Search(argv[i]);
+            v1Search *currentV1 = new v1Search(substring);
 
             // Create the Input Pair which holds a pointer to the current K1 of the
             // directory name and a pointer to V1 of the substring to search and
