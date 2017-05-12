@@ -41,12 +41,6 @@ public:
      */
     void insertItem(const OUT_ITEM &reduceItem);
 
-    /**
-     * @brief Return the empty status of the ReduceItems Vector.
-     * @return true if empty, false otherwise.
-     */
-    bool isItemsEmpty() const { return _reduceItems.empty(); };
-
 private:
     /**
      * @brief Vector of items which produced by this Thread while using Reduce.

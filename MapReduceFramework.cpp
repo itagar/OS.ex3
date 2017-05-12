@@ -6,6 +6,7 @@
 // TODO: Free memory of k2,v2 when auto delete.
 // TODO: SET CHUNK SIZE TO 10.
 // TODO: Check Destructors for the Threads.
+// TODO: Check 80 chars in line.
 
 
 /**
@@ -223,6 +224,10 @@ pthread_mutex_t shuffleIteratorMutex = PTHREAD_MUTEX_INITIALIZER;
 sem_t shuffleSemaphore;
 
 
+// TODO: Delete This.
+pthread_mutex_t printMutex = PTHREAD_MUTEX_INITIALIZER;
+
+
 /*-----=  Error Handling Functions  =-----*/
 
 
@@ -259,6 +264,9 @@ static void *execMap(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
+    // The size of the input.
+    auto inputSize = inputItems.size();
+
     // Attempt to read Chunk of input and perform Map.
     while (true)
     {
@@ -276,7 +284,7 @@ static void *execMap(void *arg)
         }
 
         // If the input is empty.
-        if (startIndex >= inputItems.size())
+        if (startIndex >= inputSize)
         {
             // Before exiting this Thread it is necessary to change it's flag
             // of 'isDone' to be true.
@@ -293,7 +301,7 @@ static void *execMap(void *arg)
 
         // Perform Map on the input chunk. If the chunk size is greater then the
         // remaining input items then we perform Map on all the remaining items.
-        for (int i = startIndex; i < inputItems.size() && i < MAP_CHUNK; ++i)
+        for (int i = startIndex; i < inputSize && i < startIndex + MAP_CHUNK; ++i)
         {
             mapReduceDriver->Map(inputItems[i].first, inputItems[i].second);
         }
@@ -317,7 +325,10 @@ static void *shuffle(void *arg)
     {
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
-    pthread_t currentThread = pthread_self();
+
+    pthread_mutex_lock(&printMutex);
+    std::cerr << "Spawn Shuffle: " << pthread_self() << std::endl;
+    pthread_mutex_unlock(&printMutex);
 
     while (true)
     {
@@ -403,7 +414,11 @@ static void *execReduce(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
-    // Attempt to read Chunk of input and perform Reduce.
+    pthread_mutex_lock(&printMutex);
+    std::cerr << "Spawn Reduce: " << pthread_self() << std::endl;
+    pthread_mutex_unlock(&printMutex);
+
+    // Attempt to read Chunk of items and perform Reduce.
     while (true)
     {
         // Attempt to gain access to the shared iterator of the shuffle items.
@@ -415,6 +430,7 @@ static void *execReduce(void *arg)
         auto startIterator = currentShuffleIterator;
         for (int i = 0; i < REDUCE_CHUNK; ++i)
         {
+            // TODO: Maybe use advance.
             // Update the shared iterator by the Chunk size. If the Chunk size
             // is greater then the number of remaining items we stop at the
             // end of shuffleItems.
@@ -429,20 +445,10 @@ static void *execReduce(void *arg)
             errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
         }
 
-        // If the input is empty.
+        // If the vector is empty.
         if (startIterator == shuffleItems.end())
         {
-            // Before exiting this Thread it is necessary to change it's flag
-            // of 'isDone' to be true.
-            pthread_t currentThread = pthread_self();
-            for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
-            {
-                if (currentThread == *(i->getThread()))
-                {
-                    i->markDone();
-                    pthread_exit(nullptr);
-                }
-            }
+            pthread_exit(nullptr);
         }
 
         // Perform Reduce on the shuffle chunk.
@@ -453,6 +459,10 @@ static void *execReduce(void *arg)
     }
 }
 
+
+/*-----=  Spawn Thread Functions  =-----*/
+
+
 /**
  * @brief Spawn the Shuffle Thread by creating it with the given routine.
  * @param routine The start routine of the Threads.
@@ -460,13 +470,13 @@ static void *execReduce(void *arg)
 static void setupShuffleThread(threadRoutine routine)
 {
     // Shuffle Thread creation and Semaphore initialization.
-    if (pthread_create(shuffleThread.getThread(), NULL, routine, NULL))
-    {
-        errorProcedure(PTHREAD_CREATE_NAME);
-    }
     if (sem_init(&shuffleSemaphore, false, 1))
     {
         errorProcedure(SEM_INIT_NAME);
+    }
+    if (pthread_create(shuffleThread.getThread(), NULL, routine, NULL))
+    {
+        errorProcedure(PTHREAD_CREATE_NAME);
     }
 }
 
@@ -541,6 +551,10 @@ static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine
     }
 }
 
+
+/*-----=  Framework Result Functions  =-----*/
+
+
 /**
  * @brief Comparator for sorting two pairs of type OUT_ITEM.
  *        The comparison is done by comparing the Key values of each
@@ -589,6 +603,10 @@ static OUT_ITEMS_VEC finalizeOutput()
     return outputItems;
 }
 
+
+/*-----=  Resource Release Functions  =-----*/
+
+
 /**
  * @brief Destroy all the Mutex created during the Framework.
  */
@@ -621,6 +639,10 @@ static void destroyAllSemaphores()
     }
 }
 
+
+/*-----=  MapReduce Framework Functions  =-----*/
+
+
 /**
  * @brief This function is called by the Map function in order to add a new
  *        pair of K2,V2 values. The function track the Thread which called it
@@ -632,6 +654,10 @@ void Emit2(k2Base *k2, v2Base *v2)
 {
     // Search for the current Thread Object.
     pthread_t currentThread = pthread_self();
+
+    pthread_mutex_lock(&printMutex);
+    std::cerr << "Emit2: " << currentThread << std::endl;
+    pthread_mutex_unlock(&printMutex);
 
     for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
     {
@@ -678,6 +704,10 @@ void Emit3(k3Base *k3, v3Base *v3)
     // Search for the current Thread Object.
     pthread_t currentThread = pthread_self();
 
+    pthread_mutex_lock(&printMutex);
+    std::cerr << "Emit3: " << currentThread << std::endl;
+    pthread_mutex_unlock(&printMutex);
+
     for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
     {
         if (currentThread == *(i->getThread()))
@@ -719,13 +749,24 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         {
             errorProcedure(PTHREAD_JOIN_NAME);
         }
+        pthread_mutex_lock(&printMutex);
+        std::cerr << "Join Map: " << *(i->getThread()) << std::endl;
+        pthread_mutex_unlock(&printMutex);
     }
+
+    pthread_mutex_lock(&printMutex);
+    std::cerr << "Join All Map" << std::endl;
+    pthread_mutex_unlock(&printMutex);
 
     // Join the Shuffle Thread.
     if (pthread_join(*(shuffleThread.getThread()), NULL))
     {
         errorProcedure(PTHREAD_JOIN_NAME);
     }
+
+    pthread_mutex_lock(&printMutex);
+    std::cerr << "Join Shuffle" << std::endl;
+    pthread_mutex_unlock(&printMutex);
 
     // Spawn Threads for Reduce.
     setupReduceThreads(multiThreadLevel, execReduce);
