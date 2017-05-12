@@ -31,51 +31,58 @@
 
 
 /**
-* @def EMPTY_ARGUMENTS 1
-* @brief A Macro that sets the number for empty arguments count.
-*/
+ * @def EMPTY_ARGUMENTS 1
+ * @brief A Macro that sets the number for empty arguments count.
+ */
 #define EMPTY_ARGUMENTS 1
 
 /**
-* @def SUBSTRING_ARGUMENT_INDEX 1
-* @brief A Macro that sets the index of the substring argument to search.
-*/
+ * @def SUBSTRING_ARGUMENT_INDEX 1
+ * @brief A Macro that sets the index of the substring argument to search.
+ */
 #define SUBSTRING_ARGUMENT_INDEX 1
 
 /**
-* @def DIRECTORY_START_INDEX 2
-* @brief A Macro that sets the index of the first directory argument.
-*/
+ * @def DIRECTORY_START_INDEX 2
+ * @brief A Macro that sets the index of the first directory argument.
+ */
 #define DIRECTORY_START_INDEX 2
 
 /**
-* @def USAGE_MSG "Usage: <substring to search> <folders, separated by space>"
-* @brief A Macro that sets the error message when the usage is invalid.
-*/
+ * @def MULTI_THREAD_LEVEL 5
+ * @brief A Macro that sets the multi thread level.
+ */
+#define MULTI_THREAD_LEVEL 5
+
+/**
+ * @def USAGE_MSG "Usage: <substring to search> <folders, separated by space>"
+ * @brief A Macro that sets the error message when the usage is invalid.
+ */
 #define USAGE_MSG "Usage: <substring to search> <folders, separated by space>"
 
 /**
-* @def SELF_DIRECTORY_NAME "."
-* @brief A Macro that sets the file name represent the directory which store it.
-*/
+ * @def SELF_DIRECTORY_NAME "."
+ * @brief A Macro that sets the file name represent the directory which store it.
+ */
 #define SELF_DIRECTORY_NAME "."
 
 /**
-* @def PARENT_DIRECTORY_NAME "."
-* @brief A Macro that sets the file name represent the parent directory of it.
-*/
+ * @def PARENT_DIRECTORY_NAME "."
+ * @brief A Macro that sets the file name represent the parent directory of it.
+ */
 #define PARENT_DIRECTORY_NAME ".."
 
 /**
-* @def EMPTY_CHAR ""
-* @brief A Macro that sets the empty character string representation.
-*/
+ * @def EMPTY_CHAR ""
+ * @brief A Macro that sets the empty character string representation.
+ */
 #define EMPTY_CHAR ""
 
 /**
-* @def WHITE_SPACE " "
-* @brief A Macro that sets the white space string representation.
-*/
+ * @def WHITE_SPACE " "
+ * @brief A Macro that sets the white space string representation.
+ */
+
 #define WHITE_SPACE " "
 
 
@@ -497,7 +504,8 @@ int main(int argc, char* argv[])
         }
 
         // Perform the MapReduce Process.
-        output = RunMapReduceFramework(mapReduceSearch, input, 5, true);
+        output = RunMapReduceFramework(mapReduceSearch, input,
+                                       MULTI_THREAD_LEVEL, true);
 
         // Output to the Standard Output the results.
         outputProcedure(output);

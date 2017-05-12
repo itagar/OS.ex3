@@ -7,7 +7,9 @@
 // TODO: SET CHUNK SIZE TO 10.
 // TODO: Check Destructors for the Threads.
 // TODO: Check 80 chars in line.
-
+// TODO: Split to helper functions.
+// TODO: Shuffle + free resources.
+// TODO: Check empty input.
 
 /**
  * @file MapReduceFramework.cpp
@@ -36,87 +38,87 @@
 
 
 /**
-* @def INITIAL_INPUT_INDEX 0
-* @brief A Macro that sets the value of the initial index in the index counters.
-*/
+ * @def INITIAL_INPUT_INDEX 0
+ * @brief A Macro that sets the value of the initial index in the index counters.
+ */
 #define INITIAL_INPUT_INDEX 0
 
 /**
-* @def MAP_CHUNK 10
-* @brief A Macro that sets the chunk size that the ExecMap will be applied.
-*/
+ * @def MAP_CHUNK 10
+ * @brief A Macro that sets the chunk size that the ExecMap will be applied.
+ */
 #define MAP_CHUNK 2
 
 /**
-* @def REDUCE_CHUNK_SIZE 10
-* @brief A Macro that sets the chunk size that the ExecReduce will be applied.
-*/
-#define REDUCE_CHUNK 10
+ * @def REDUCE_CHUNK_SIZE 10
+ * @brief A Macro that sets the chunk size that the ExecReduce will be applied.
+ */
+#define REDUCE_CHUNK 2
 
 /**
-* @def ERROR_MESSAGE_PREFIX "MapReduceFramework Failure: "
-* @brief A Macro that sets error message prefix.
-*/
+ * @def ERROR_MESSAGE_PREFIX "MapReduceFramework Failure: "
+ * @brief A Macro that sets error message prefix.
+ */
 #define ERROR_MESSAGE_PREFIX "MapReduceFramework Failure: "
 
 /**
-* @def ERROR_MESSAGE_SUFFIX " failed."
-* @brief A Macro that sets error message suffix which follows a function name.
-*/
+ * @def ERROR_MESSAGE_SUFFIX " failed."
+ * @brief A Macro that sets error message suffix which follows a function name.
+ */
 #define ERROR_MESSAGE_SUFFIX " failed."
 
 /**
-* @def PTHREAD_CREATE_NAME "pthread_create"
-* @brief A Macro that sets function name for pthread_create.
-*/
+ * @def PTHREAD_CREATE_NAME "pthread_create"
+ * @brief A Macro that sets function name for pthread_create.
+ */
 #define PTHREAD_CREATE_NAME "pthread_create"
 
 /**
-* @def PTHREAD_JOIN_NAME "pthread_join"
-* @brief A Macro that sets function name for pthread_join.
-*/
+ * @def PTHREAD_JOIN_NAME "pthread_join"
+ * @brief A Macro that sets function name for pthread_join.
+ */
 #define PTHREAD_JOIN_NAME "pthread_join"
 
 /**
-* @def PTHREAD_MUTEX_LOCK_NAME "pthread_mutex_lock"
-* @brief A Macro that sets function name for pthread_mutex_lock.
-*/
+ * @def PTHREAD_MUTEX_LOCK_NAME "pthread_mutex_lock"
+ * @brief A Macro that sets function name for pthread_mutex_lock.
+ */
 #define PTHREAD_MUTEX_LOCK_NAME "pthread_mutex_lock"
 
 /**
-* @def PTHREAD_MUTEX_UNLOCK_NAME "pthread_mutex_unlock"
-* @brief A Macro that sets function name for pthread_mutex_unlock.
-*/
+ * @def PTHREAD_MUTEX_UNLOCK_NAME "pthread_mutex_unlock"
+ * @brief A Macro that sets function name for pthread_mutex_unlock.
+ */
 #define PTHREAD_MUTEX_UNLOCK_NAME "pthread_mutex_unlock"
 
 /**
-* @def PTHREAD_MUTEX_DESTROY_NAME "pthread_mutex_destroy"
-* @brief A Macro that sets function name for pthread_mutex_destroy.
-*/
+ * @def PTHREAD_MUTEX_DESTROY_NAME "pthread_mutex_destroy"
+ * @brief A Macro that sets function name for pthread_mutex_destroy.
+ */
 #define PTHREAD_MUTEX_DESTROY_NAME "pthread_mutex_destroy"
 
 /**
-* @def SEM_INIT_NAME "sem_init"
-* @brief A Macro that sets function name for sem_init.
-*/
+ * @def SEM_INIT_NAME "sem_init"
+ * @brief A Macro that sets function name for sem_init.
+ */
 #define SEM_INIT_NAME "sem_init"
 
 /**
-* @def SEM_WAIT_NAME "sem_wait"
-* @brief A Macro that sets function name for sem_wait.
-*/
+ * @def SEM_WAIT_NAME "sem_wait"
+ * @brief A Macro that sets function name for sem_wait.
+ */
 #define SEM_WAIT_NAME "sem_wait"
 
 /**
-* @def SEM_POST_NAME "sem_post"
-* @brief A Macro that sets function name for sem_post.
-*/
+ * @def SEM_POST_NAME "sem_post"
+ * @brief A Macro that sets function name for sem_post.
+ */
 #define SEM_POST_NAME "sem_post"
 
 /**
-* @def SEM_DESTROY_NAME "sem_destroy"
-* @brief A Macro that sets function name for sem_destroy.
-*/
+ * @def SEM_DESTROY_NAME "sem_destroy"
+ * @brief A Macro that sets function name for sem_destroy.
+ */
 #define SEM_DESTROY_NAME "sem_destroy"
 
 
@@ -223,7 +225,6 @@ pthread_mutex_t shuffleIteratorMutex = PTHREAD_MUTEX_INITIALIZER;
  */
 sem_t shuffleSemaphore;
 
-
 // TODO: Delete This.
 pthread_mutex_t printMutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -308,7 +309,7 @@ static void *execMap(void *arg)
     }
 }
 
-// TODO: Implement this.
+// TODO: Fix this function.
 /**
  * @brief The function which execute the Map procedure by a single Thread.
  */
@@ -325,10 +326,6 @@ static void *shuffle(void *arg)
     {
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
-
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Spawn Shuffle: " << pthread_self() << std::endl;
-    pthread_mutex_unlock(&printMutex);
 
     while (true)
     {
@@ -371,10 +368,9 @@ static void *shuffle(void *arg)
                     errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
                 }
 
-                // TODO: try get ALL items of this Thread and clear it's vector.
-                MAP_ITEM item = std::make_pair(i->getMapItems().back().first,
-                                               i->getMapItems().back().second);
-                i->getMapItems().pop_back();
+                // Absorb all the items from this Thread and clear it's Vector.
+                itemsToShuffle = i->getMapItems();
+                i->clearItems();
 
                 // Unlock this Thread MapItems Vector.
                 if (pthread_mutex_unlock(&currentMutex))
@@ -382,17 +378,15 @@ static void *shuffle(void *arg)
                     errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
                 }
 
-                if (autoDeleteV2K2Flag)
-                {
-                    // TODO: Free the item resources.
-                    // Free the item resources.
-                }
-
-                // The Shuffle.
-                shuffleItems[item.first].push_back(item.second);
-
-
+                break;
             }
+        }
+
+        for (auto i = itemsToShuffle.begin(); i != itemsToShuffle.end(); ++i)
+        {
+            // The Shuffle.
+            MAP_ITEM item = std::make_pair(i->first, i->second);
+            shuffleItems[item.first].push_back(item.second);
         }
     }
 }
@@ -414,10 +408,6 @@ static void *execReduce(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Spawn Reduce: " << pthread_self() << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
     // Attempt to read Chunk of items and perform Reduce.
     while (true)
     {
@@ -430,7 +420,6 @@ static void *execReduce(void *arg)
         auto startIterator = currentShuffleIterator;
         for (int i = 0; i < REDUCE_CHUNK; ++i)
         {
-            // TODO: Maybe use advance.
             // Update the shared iterator by the Chunk size. If the Chunk size
             // is greater then the number of remaining items we stop at the
             // end of shuffleItems.
@@ -654,11 +643,6 @@ void Emit2(k2Base *k2, v2Base *v2)
 {
     // Search for the current Thread Object.
     pthread_t currentThread = pthread_self();
-
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Emit2: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
     for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
     {
         if (currentThread == *(i->getThread()))
@@ -703,11 +687,6 @@ void Emit3(k3Base *k3, v3Base *v3)
 {
     // Search for the current Thread Object.
     pthread_t currentThread = pthread_self();
-
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Emit3: " << currentThread << std::endl;
-    pthread_mutex_unlock(&printMutex);
-
     for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
     {
         if (currentThread == *(i->getThread()))
@@ -749,14 +728,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         {
             errorProcedure(PTHREAD_JOIN_NAME);
         }
-        pthread_mutex_lock(&printMutex);
-        std::cerr << "Join Map: " << *(i->getThread()) << std::endl;
-        pthread_mutex_unlock(&printMutex);
     }
-
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Join All Map" << std::endl;
-    pthread_mutex_unlock(&printMutex);
 
     // Join the Shuffle Thread.
     if (pthread_join(*(shuffleThread.getThread()), NULL))
@@ -764,9 +736,8 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         errorProcedure(PTHREAD_JOIN_NAME);
     }
 
-    pthread_mutex_lock(&printMutex);
-    std::cerr << "Join Shuffle" << std::endl;
-    pthread_mutex_unlock(&printMutex);
+    // Set the Shuffle iterator to the container begin.
+    currentShuffleIterator = shuffleItems.begin();
 
     // Spawn Threads for Reduce.
     setupReduceThreads(multiThreadLevel, execReduce);

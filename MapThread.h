@@ -73,6 +73,11 @@ public:
     void insertItem(const MAP_ITEM &mapItem);
 
     /**
+     * @brief Clear all items from the MapItems Vector
+     */
+    void clearItems() { _mapItems.clear(); };
+
+    /**
      * @brief Return the empty status of the MapItems Vector.
      * @return true if empty, false otherwise.
      */
