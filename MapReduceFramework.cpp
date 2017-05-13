@@ -6,6 +6,9 @@
 // TODO: Check Destructors for the Threads.
 // TODO: Split to helper functions.
 // TODO: Check empty input.
+// TODO: Add '.' to the log name.
+// TODO: Need to use mutex in log file.
+// TODO: Log elapsed Time.
 
 /**
  * @file MapReduceFramework.cpp
@@ -19,12 +22,14 @@
 
 
 #include <iostream>
+#include <fstream>
 #include <pthread.h>
 #include <semaphore.h>
 #include <map>
 #include <algorithm>
 #include <cassert>
 #include <functional>
+#include <iomanip>
 #include "MapReduceFramework.h"
 #include "Thread.h"
 #include "MapThread.h"
@@ -124,6 +129,12 @@
  */
 #define SEM_DESTROY_NAME "sem_destroy"
 
+/**
+ * @def LOG_FILE_NAME ".MapReduceFramework.log"
+ * @brief A Macro that sets the name of the Log File.
+ */
+#define LOG_FILE_NAME "MapReduceFramework.log"
+
 
 /*-----=  Type Definitions  =-----*/
 
@@ -209,6 +220,12 @@ auto currentShuffleIterator = shuffleItems.begin();
  */
 bool autoDeleteV2K2Flag;
 
+/**
+ * @brief The Log File of this Framework.
+ */
+std::ofstream logFile;
+// TODO: Create Mutex for log.
+
 
 /*-----=  Mutex & Semaphore  =-----*/
 
@@ -229,12 +246,15 @@ pthread_mutex_t inputIndexMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t shuffleIteratorMutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
+ * @brief Mutex for writing to the Log File.
+ */
+pthread_mutex_t logMutex = PTHREAD_MUTEX_INITIALIZER;
+
+/**
  * @brief Semaphore for the Shuffle and the Map Threads workflow.
  */
 sem_t shuffleSemaphore;
 
-// TODO: Delete This.
-pthread_mutex_t printMutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 /*-----=  Error Handling Functions  =-----*/
@@ -250,6 +270,68 @@ static void errorProcedure(const char *functionName)
 {
     std::cerr << ERROR_MESSAGE_PREFIX << functionName << ERROR_MESSAGE_SUFFIX;
     exit(EXIT_FAILURE);
+}
+
+
+/*-----=  Log Functions  =-----*/
+
+
+// TODO: Doxygen.
+static void initLogFile(const int multiThreadLevel)
+{
+    // TODO: Magic Number.
+    logFile.open(LOG_FILE_NAME, std::ios_base::app | std::ios_base::out);
+    logFile << "RunMapReduceFramework started with " << multiThreadLevel << " threads\n";
+}
+
+// TODO: Doxygen.
+static void getTimeAndDate()
+{
+    time_t now = time(0);
+    tm *currentTime = localtime(&now);
+
+    int day = currentTime->tm_mday;
+    int month = currentTime->tm_mon + 1;
+    int year = currentTime->tm_year + 1900;
+
+    int hour = currentTime->tm_hour;
+    int min = currentTime->tm_min;
+    int sec = currentTime->tm_sec;
+
+    // TODO: Magic Number.
+    logFile << "[" << std::setfill('0') << std::setw(2) << day
+            << "." << std::setfill('0') << std::setw(2) << month
+            << "." << std::setfill('0') << std::setw(2) << year
+            << " " << std::setfill('0') << std::setw(2) << hour
+            << ":" << std::setfill('0') << std::setw(2) << min
+            << ":" << std::setfill('0') << std::setw(2) << sec
+            << "]";
+}
+
+// TODO: Doxygen.
+static void logThreadCreate(const std::string &threadName)
+{
+    // TODO: Magic Number.
+    logFile << "Thread " << threadName << " created ";
+    getTimeAndDate();
+    logFile << "\n";
+}
+
+// TODO: Doxygen.
+static void logThreadTerminate(const std::string &threadName)
+{
+    // TODO: Magic Number.
+    logFile << "Thread " << threadName << " terminated ";
+    getTimeAndDate();
+    logFile << "\n";
+}
+
+// TODO: Doxygen.
+static void finishLogFile()
+{
+    // TODO: Magic Number.
+    logFile << "RunMapReduceFramework finished\n";
+    logFile.close();
 }
 
 
@@ -303,6 +385,15 @@ static void *execMap(void *arg)
                 if (currentThread == *(i->getThread()))
                 {
                     i->markDone();
+                    if (pthread_mutex_lock(&logMutex))
+                    {
+                        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+                    }
+                    logThreadTerminate("ExecMap");  // TODO: Magic Number.
+                    if (pthread_mutex_unlock(&logMutex))
+                    {
+                        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+                    }
                     pthread_exit(nullptr);
                 }
             }
@@ -379,6 +470,15 @@ static void *shuffle(void *arg)
         if (threadsIterator == mapThreads.end())
         {
             // All Threads finished their work and all the items been shuffled.
+            if (pthread_mutex_lock(&logMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+            }
+            logThreadTerminate("Shuffle");  // TODO: Magic Number.
+            if (pthread_mutex_unlock(&logMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+            }
             pthread_exit(nullptr);
         }
 
@@ -498,6 +598,15 @@ static void *execReduce(void *arg)
         // If the vector is empty.
         if (startIterator == shuffleItems.end())
         {
+            if (pthread_mutex_lock(&logMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+            }
+            logThreadTerminate("ExecReduce");  // TODO: Magic Number.
+            if (pthread_mutex_unlock(&logMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+            }
             pthread_exit(nullptr);
         }
 
@@ -528,6 +637,15 @@ static void setupShuffleThread(threadRoutine routine)
     {
         errorProcedure(PTHREAD_CREATE_NAME);
     }
+    if (pthread_mutex_lock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+    }
+    logThreadCreate("Shuffle");  // TODO: Magic Number.
+    if (pthread_mutex_unlock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+    }
 }
 
 /**
@@ -554,6 +672,15 @@ static void setupMapThreads(int const multiThreadLevel, threadRoutine routine)
         if (pthread_create(i->getThread(), NULL, routine, NULL))
         {
             errorProcedure(PTHREAD_CREATE_NAME);
+        }
+        if (pthread_mutex_lock(&logMutex))
+        {
+            errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+        }
+        logThreadCreate("ExecMap");  // TODO: Magic Number.
+        if (pthread_mutex_unlock(&logMutex))
+        {
+            errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
         }
     }
 
@@ -591,6 +718,15 @@ static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine
         if (pthread_create(i->getThread(), NULL, routine, NULL))
         {
             errorProcedure(PTHREAD_CREATE_NAME);
+        }
+        if (pthread_mutex_lock(&logMutex))
+        {
+            errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+        }
+        logThreadCreate("ExecReduce");  // TODO: Magic Number.
+        if (pthread_mutex_unlock(&logMutex))
+        {
+            errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
         }
     }
 
@@ -676,6 +812,11 @@ static void destroyAllMutex()
     {
         errorProcedure(PTHREAD_MUTEX_DESTROY_NAME);
     }
+
+    if (pthread_mutex_destroy(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_DESTROY_NAME);
+    }
 }
 
 /**
@@ -699,7 +840,6 @@ static void freeK2V2Items()
     for (auto i = shuffleItems.begin(); i != shuffleItems.end(); ++i)
     {
         delete i->first;
-//        i->first = nullptr;  // TODO: Check this.
         for (auto j = i->second.begin(); j != i->second.end(); ++j)
         {
             delete *j;
@@ -801,6 +941,8 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
                                     int multiThreadLevel,
                                     bool autoDeleteV2K2)
 {
+    initLogFile(multiThreadLevel);
+
     mapReduceDriver = &mapReduce;  // Set the MapReduce specific implementation.
     inputItems = itemsVec;  // Set the Input Items.
     autoDeleteV2K2Flag = autoDeleteV2K2;  // Set the auto delete flag.
@@ -848,6 +990,8 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
 
     // Release all Resources.
     releaseAllResources();
+
+    finishLogFile();
 
     return frameworkOutput;
 }
