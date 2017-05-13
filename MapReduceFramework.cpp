@@ -2,15 +2,10 @@
 // TODO: README
 // TODO: Makefile
 // TODO: Implement Log File.
-// TODO: Destroy all threads, mutex, semaphores.
-// TODO: Free memory of k2,v2 when auto delete.
 // TODO: SET CHUNK SIZE TO 10.
 // TODO: Check Destructors for the Threads.
-// TODO: Check 80 chars in line.
 // TODO: Split to helper functions.
-// TODO: Shuffle + free resources.
 // TODO: Check empty input.
-// TODO: Every once in a while there is a deadlock or seg fault. check this.
 
 /**
  * @file MapReduceFramework.cpp
@@ -41,7 +36,7 @@
 
 /**
  * @def INITIAL_INPUT_INDEX 0
- * @brief A Macro that sets the value of the initial index in the index counters.
+ * @brief A Macro that sets the value of initial index in the index counters.
  */
 #define INITIAL_INPUT_INDEX 0
 
@@ -349,7 +344,6 @@ static bool shuffleEquality(const MAP_ITEM &lhs, const SHUFFLE_ITEM &rhs)
     return !(*(lhs.first) < *(rhs.first)) && !(*(rhs.first) < *(lhs.first));
 }
 
-// TODO: Fix this function.
 /**
  * @brief The function which execute the Map procedure by a single Thread.
  */
@@ -516,7 +510,7 @@ static void *execReduce(void *arg)
 }
 
 
-/*-----=  Spawn Thread Functions  =-----*/
+/*-----=  Spawn & Join Thread Functions  =-----*/
 
 
 /**
@@ -702,9 +696,6 @@ static void destroyAllSemaphores()
  */
 static void freeK2V2Items()
 {
-    pthread_mutex_lock(&printMutex);
-    std::cout << "FREE" << std::endl;
-    pthread_mutex_unlock(&printMutex);
     for (auto i = shuffleItems.begin(); i != shuffleItems.end(); ++i)
     {
         delete i->first;
@@ -714,6 +705,19 @@ static void freeK2V2Items()
             delete *j;
             *j = nullptr;
         }
+    }
+}
+
+/**
+ * @brief Release all resources of the Framework.
+ */
+static void releaseAllResources()
+{
+    destroyAllMutex();
+    destroyAllSemaphores();
+    if (autoDeleteV2K2Flag)
+    {
+        freeK2V2Items();
     }
 }
 
@@ -813,8 +817,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         }
     }
 
-
-    // Indicate Shuffle that there are items to shuffle.
+    // Indicate Shuffle that all Threads finished.
     if (sem_post(&shuffleSemaphore))
     {
         errorProcedure(SEM_POST_NAME);
@@ -825,10 +828,6 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     {
         errorProcedure(PTHREAD_JOIN_NAME);
     }
-
-    pthread_mutex_lock(&printMutex);
-    std::cout << "JOIN SHUFFLE" << std::endl;
-    pthread_mutex_unlock(&printMutex);
 
     // Set the Shuffle iterator to the container begin.
     currentShuffleIterator = shuffleItems.begin();
@@ -848,12 +847,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     OUT_ITEMS_VEC frameworkOutput = finalizeOutput();
 
     // Release all Resources.
-    destroyAllMutex();
-    destroyAllSemaphores();
-    if (autoDeleteV2K2Flag)
-    {
-        freeK2V2Items();
-    }
+    releaseAllResources();
 
     return frameworkOutput;
 }
