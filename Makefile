@@ -44,4 +44,16 @@ tar:
 clean:
 	-rm -vf *.o *.a *.tar Search
 
+# Valgrind
+Valgrind: MapReduceFramework Search.cpp
+	$(CXX) -g -Wall -std=c++11 Search.cpp -L. MapReduceFramework.a -lpthread -o Valgrind
+	valgrind --leak-check=full --show-possibly-lost=yes --show-reachable=yes --undef-value-errors=yes ./Valgrind Itai Dir1 ASA Makefile Dir2 Itai README
+	-rm -vf *.o *.a Valgrind
+
+# Valgrind2
+Valgrind2: MapReduceFramework Search.cpp
+	$(CXX) -g -Wall -std=c++11 Search.cpp -L. MapReduceFramework.a -lpthread -o Valgrind
+	valgrind --track-origins=yes ./Valgrind Itai Dir1 ASA Makefile Dir2 Itai README
+	-rm -vf *.o *.a Valgrind
+
 	

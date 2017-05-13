@@ -1,9 +1,3 @@
-// TODO: Valgrind
-// TODO: README
-// TODO: Makefile
-// TODO: Check 'new' failure.
-// TODO: Check if the Output is empty.
-
 /**
  * @file Search.cpp
  * @author Itai Tagar <itagar>
@@ -62,7 +56,7 @@
 
 /**
  * @def SELF_DIRECTORY_NAME "."
- * @brief A Macro that sets the file name represent the directory which store it.
+ * @brief A Macro that sets the filename represent the directory which store it.
  */
 #define SELF_DIRECTORY_NAME "."
 
@@ -313,7 +307,7 @@ public:
             if (currentFileName.find(substring) != std::string::npos)
             {
                 // If the file name contains the substring to search.
-                k2Search *currentK2 = new k2Search(currentFileName);  // TODO: new might fail.
+                k2Search *currentK2 = new k2Search(currentFileName);
                 Emit2(currentK2, nullptr);
             }
         }
@@ -343,7 +337,7 @@ public:
         // n times during the Search process.
         for (unsigned int i = 0; i < vals.size(); ++i)
         {
-            k3Search *currentK3 = new k3Search(currentFileName);  // TODO: new might fail.
+            k3Search *currentK3 = new k3Search(currentFileName);
             Emit3(currentK3, nullptr);
         }
     }
@@ -394,7 +388,7 @@ private:
  *        message specifying the correct and exit.
  * @param argc The number of arguments given to the program.
  */
-void checkArguments(int const argc)
+static void checkArguments(int const argc)
 {
     if (argc <= EMPTY_ARGUMENTS)
     {
@@ -411,7 +405,7 @@ void checkArguments(int const argc)
  * @param rhs The second pair to compare.
  * @return true if lhs is smaller then rhs, false otherwise.
  */
-bool SearchPairSort(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
+static bool SearchPairSort(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
 {
     assert(lhs.first != nullptr && rhs.first != nullptr);
     return *(lhs.first) < *(rhs.first);
@@ -421,7 +415,7 @@ bool SearchPairSort(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
  * @brief produce the output results of the Search process to the user.
  * @param output The output vector obtained by the MapReduce Framework.
  */
-void outputProcedure(OUT_ITEMS_VEC &output)
+static void outputProcedure(OUT_ITEMS_VEC &output)
 {
     // Sort the output vector according to alphabet order.
     std::sort(output.begin(), output.end(), SearchPairSort);
@@ -445,7 +439,7 @@ void outputProcedure(OUT_ITEMS_VEC &output)
  * @param output The output vector which contains pointers to allocated objects
  *        of K3 and V3 pairs.
  */
-void freeResources(IN_ITEMS_VEC &input, OUT_ITEMS_VEC &output)
+static void freeResources(IN_ITEMS_VEC &input, OUT_ITEMS_VEC &output)
 {
     // Free all resources for objects in the Input Vector.
     for (auto i = input.begin(); i != input.end(); ++i)
@@ -483,8 +477,8 @@ int main(int argc, char* argv[])
 
     try
     {
-        // Set the substring to be the value of the desired substring to search and
-        // create a matching V1 object associated with this substring.
+        // Set the substring to be the value of the desired substring to search
+        // and create a matching V1 object associated with this substring.
         assert(argc > SUBSTRING_ARGUMENT_INDEX);
         const std::string substring = argv[SUBSTRING_ARGUMENT_INDEX];
 
@@ -496,9 +490,9 @@ int main(int argc, char* argv[])
             k1Search *currentK1 = new k1Search(argv[i]);
             v1Search *currentV1 = new v1Search(substring);
 
-            // Create the Input Pair which holds a pointer to the current K1 of the
-            // directory name and a pointer to V1 of the substring to search and
-            // store it in the Input Vector.
+            // Create the Input Pair which holds a pointer to the current K1 of
+            // the directory name and a pointer to V1 of the substring to
+            // search and store it in the Input Vector.
             assert(currentV1 != nullptr && currentK1 != nullptr);
             input.push_back(std::make_pair(currentK1, currentV1));
         }

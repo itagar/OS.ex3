@@ -29,6 +29,7 @@
 #include <map>
 #include <algorithm>
 #include <cassert>
+#include <functional>
 #include "MapReduceFramework.h"
 #include "Thread.h"
 #include "MapThread.h"
@@ -55,6 +56,12 @@
  * @brief A Macro that sets the chunk size that the ExecReduce will be applied.
  */
 #define REDUCE_CHUNK 2
+
+/**
+ * @def SHUFFLE_SEMAPHORE_VALUE 0
+ * @brief A Macro that sets the value of the Shuffle Semaphore.
+ */
+#define SHUFFLE_SEMAPHORE_VALUE 0
 
 /**
  * @def ERROR_MESSAGE_PREFIX "MapReduceFramework Failure: "
@@ -140,6 +147,11 @@ typedef std::vector<ReduceThread> ReduceThreadsVector;
  * @brief Type Definition for the Vector of pointers to V2 objects.
  */
 typedef std::vector<v2Base*> V2Vector;
+
+/**
+ * @brief Type Definition for the pair of Shuffle item.
+ */
+typedef std::pair<k2Base*, V2Vector> SHUFFLE_ITEM;
 
 /**
  * @brief Type Definition for the map of Shuffle items.
@@ -303,11 +315,38 @@ static void *execMap(void *arg)
 
         // Perform Map on the input chunk. If the chunk size is greater then the
         // remaining input items then we perform Map on all the remaining items.
-        for (int i = startIndex; i < inputSize && i < startIndex + MAP_CHUNK; ++i)
+        for (unsigned int i = startIndex;
+             i < inputSize && i < startIndex + MAP_CHUNK;
+             ++i)
         {
             mapReduceDriver->Map(inputItems[i].first, inputItems[i].second);
         }
+
+        // Indicate Shuffle that there are items to shuffle.
+        if (sem_post(&shuffleSemaphore))
+        {
+            errorProcedure(SEM_POST_NAME);
+        }
     }
+}
+
+/**
+ * @brief Check Equality between 2 item keys from the Shuffle Map.
+ *        The two items to compare are a pair of K2 and a Vector of V2 items,
+ *        i.e. a Shuffle Item. The second item is a Map Item which first
+ *        received by the ExecShuffle from a Map Thread.
+ *        Both items are pairs with the K2 as first.
+ *        K2 implement the operator <. We say that the first item equals
+ *        the second item if the first K2 doesn't greater then the second one
+ *        and also doesn't smaller then it.
+ * @param lhs The first item to compare.
+ * @param rhs The second item to compare.
+ * @return True if the two items are equal, false otherwise.
+ */
+static bool shuffleEquality(const MAP_ITEM &lhs, const SHUFFLE_ITEM &rhs)
+{
+    assert(lhs.first != nullptr && rhs.first != nullptr);
+    return !(*(lhs.first) < *(rhs.first)) && !(*(rhs.first) < *(lhs.first));
 }
 
 // TODO: Fix this function.
@@ -330,12 +369,6 @@ static void *shuffle(void *arg)
 
     while (true)
     {
-        // Wait for items to work with.
-        if (sem_wait(&shuffleSemaphore))
-        {
-            errorProcedure(SEM_WAIT_NAME);
-        }
-
         MAP_ITEMS_VEC itemsToShuffle;
 
         // Check if there is a Map Thread which hasn't been marked as done.
@@ -353,6 +386,13 @@ static void *shuffle(void *arg)
         {
             // All Threads finished their work and all the items been shuffled.
             pthread_exit(nullptr);
+        }
+
+        // TODO: Moved semaphore here, Check this!
+        // Wait for items to work with.
+        if (sem_wait(&shuffleSemaphore))
+        {
+            errorProcedure(SEM_WAIT_NAME);
         }
 
         // Iterate through MapThreads and check which has a non-empty container.
@@ -383,10 +423,36 @@ static void *shuffle(void *arg)
             }
         }
 
+        // The Shuffle.
         for (auto i = itemsToShuffle.begin(); i != itemsToShuffle.end(); ++i)
         {
-            // The Shuffle.
+            // Create the current item to shuffle.
             MAP_ITEM item = std::make_pair(i->first, i->second);
+
+            // Search for the current K2 value in the Shuffle Map.
+            using namespace std::placeholders;
+            auto shuffleFind = std::bind(shuffleEquality, std::cref(item), _1);
+            auto K2Iterator = std::find_if(shuffleItems.begin(),
+                                           shuffleItems.end(), shuffleFind);
+
+            // If the current Key is already in the Shuffle Map we just add it's
+            // value to the proper position in the container. If AutoDelete flag
+            // is true then we also need to release the resources of this
+            // specific K2 because we don't store it in the Shuffle Map.
+            if (K2Iterator != shuffleItems.end())
+            {
+                // Add the value to the existing K2 key.
+                K2Iterator->second.push_back(item.second);
+                // Release resources of the current unused K2 key.
+                if (autoDeleteV2K2Flag)
+                {
+                    delete item.first;
+                }
+                continue;
+            }
+
+            // If the current Key is not in the Shuffle we add it with it's
+            // corresponding V2.
             shuffleItems[item.first].push_back(item.second);
         }
     }
@@ -460,7 +526,7 @@ static void *execReduce(void *arg)
 static void setupShuffleThread(threadRoutine routine)
 {
     // Shuffle Thread creation and Semaphore initialization.
-    if (sem_init(&shuffleSemaphore, false, 1))
+    if (sem_init(&shuffleSemaphore, false, SHUFFLE_SEMAPHORE_VALUE))
     {
         errorProcedure(SEM_INIT_NAME);
     }
@@ -553,7 +619,7 @@ static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine
  * @param rhs The second pair to compare.
  * @return true if lhs is smaller then rhs, false otherwise.
  */
-bool sortPairs(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
+static bool sortPairs(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
 {
     assert(lhs.first != nullptr && rhs.first != nullptr);
     return *(lhs.first) < *(rhs.first);
@@ -629,6 +695,28 @@ static void destroyAllSemaphores()
     }
 }
 
+/**
+ * @brief Release all resources of K2 and V2 in the Shuffle Map. Note that if
+ *        some K2 did not enter the Shuffle Map, the Shuffle procedure already
+ *        took care of it's resources.
+ */
+static void freeK2V2Items()
+{
+    pthread_mutex_lock(&printMutex);
+    std::cout << "FREE" << std::endl;
+    pthread_mutex_unlock(&printMutex);
+    for (auto i = shuffleItems.begin(); i != shuffleItems.end(); ++i)
+    {
+        delete i->first;
+//        i->first = nullptr;  // TODO: Check this.
+        for (auto j = i->second.begin(); j != i->second.end(); ++j)
+        {
+            delete *j;
+            *j = nullptr;
+        }
+    }
+}
+
 
 /*-----=  MapReduce Framework Functions  =-----*/
 
@@ -664,12 +752,6 @@ void Emit2(k2Base *k2, v2Base *v2)
             if (pthread_mutex_unlock(&currentMutex))
             {
                 errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
-            }
-
-            // Indicate Shuffle that there are items to shuffle.
-            if (sem_post(&shuffleSemaphore))
-            {
-                errorProcedure(SEM_POST_NAME);
             }
 
             return;
@@ -731,11 +813,22 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         }
     }
 
+
+    // Indicate Shuffle that there are items to shuffle.
+    if (sem_post(&shuffleSemaphore))
+    {
+        errorProcedure(SEM_POST_NAME);
+    }
+
     // Join the Shuffle Thread.
     if (pthread_join(*(shuffleThread.getThread()), NULL))
     {
         errorProcedure(PTHREAD_JOIN_NAME);
     }
+
+    pthread_mutex_lock(&printMutex);
+    std::cout << "JOIN SHUFFLE" << std::endl;
+    pthread_mutex_unlock(&printMutex);
 
     // Set the Shuffle iterator to the container begin.
     currentShuffleIterator = shuffleItems.begin();
@@ -757,8 +850,10 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     // Release all Resources.
     destroyAllMutex();
     destroyAllSemaphores();
-    // TODO: Release resources of k2, v2.
-    // TODO: Release resources of Threads.
+    if (autoDeleteV2K2Flag)
+    {
+        freeK2V2Items();
+    }
 
     return frameworkOutput;
 }
