@@ -1,7 +1,7 @@
 CXX= g++
 CXXFLAGS= -c -Wall -std=c++11 -pthread -DNDEBUG
 CODEFILES= ex3.tar Search.cpp MapReduceFramework.cpp Makefile README
-LIBOBJECTS= MapReduceFramework.o Thread.h MapThread.h ReduceThread.h
+LIBOBJECTS= MapReduceFramework.o
 
 
 # Default
@@ -9,7 +9,7 @@ default: MapReduceFramework Search
 
 
 # Executables
-MapReduceFramework: MapReduceFramework.o Thread.h MapThread.h ReduceThread.h
+MapReduceFramework: MapReduceFramework.o
 	ar rcs MapReduceFramework.a $(LIBOBJECTS)
 	-rm -f *.o
 
@@ -35,21 +35,17 @@ tar:
 clean:
 	-rm -vf *.o *.a *.tar Search
 
+
 # Valgrind
-Valgrind: MapReduceFramework Search.cpp
-	$(CXX) -g -Wall -std=c++11 Search.cpp -L. MapReduceFramework.a -lpthread -o Valgrind
-	valgrind --leak-check=full --show-possibly-lost=yes --show-reachable=yes --undef-value-errors=yes ./Valgrind Itai Dir1 ASA Makefile Dir2 Itai README
+Valgrind: MapReduceFramework MyTest.cpp
+	$(CXX) -g -Wall -std=c++11 MyTest.cpp -L. MapReduceFramework.a -lpthread -o Valgrind
+	valgrind --leak-check=full --show-possibly-lost=yes --show-reachable=yes --undef-value-errors=yes ./Valgrind
 	-rm -vf *.o *.a Valgrind
 
-# Valgrind2
-Valgrind2: MapReduceFramework Search.cpp
-	$(CXX) -g -Wall -std=c++11 test1.cpp -L. MapReduceFramework.a -lpthread -o Valgrind
-	valgrind --track-origins=yes ./Valgrind Itai Dir1 ASA Makefile Dir2 Itai README
-	-rm -vf *.o *.a Valgrind
 
 # Helgrind
-Helgrind: MapReduceFramework Search.cpp
-	$(CXX) -g -Wall -std=c++11 Search.cpp -L. MapReduceFramework.a -lpthread -o Helgrind
-	valgrind --tool=helgrind ./Helgrind Itai Dir1 ASA Makefile Dir2 Itai README
+Helgrind: MapReduceFramework MyTest.cpp
+	$(CXX) -g -Wall -std=c++11 MyTest.cpp -L. MapReduceFramework.a -lpthread -o Helgrind
+	valgrind --tool=helgrind ./Helgrind
 	-rm -vf *.o *.a Helgrind
 	
