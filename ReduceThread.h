@@ -29,23 +29,10 @@ class ReduceThread : public Thread
 {
 public:
     /**
-     * @brief Get access to ReduceItems Vector of this Thread.
-     * @return ReduceItems Vector of this Thread.
-     */
-    OUT_ITEMS_VEC getReduceItems() { return _reduceItems; };
-
-    /**
-     * @brief Inserts the given item produced during the Reduce procedure into
-     *        this Threads ReduceItems Vector.
-     * @param reduceItem The item to insert.
-     */
-    void insertItem(const OUT_ITEM &reduceItem);
-
-private:
-    /**
      * @brief Vector of items which produced by this Thread while using Reduce.
      */
-    OUT_ITEMS_VEC _reduceItems;
+    OUT_ITEMS_VEC reduceItems;
+
 };
 
 

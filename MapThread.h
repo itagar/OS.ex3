@@ -44,55 +44,15 @@ class MapThread : public Thread
 {
 public:
     /**
-     * @brief The Constructor for the MapThread Class.
-     */
-    MapThread();
-
-    /**
-     * @brief The Destructor for the MapThread Class.
-     */
-    virtual ~MapThread() override;
-
-    /**
-     * @brief Gets the Map Mutex.
-     * @return The Map Mutex.
-     */
-    pthread_mutex_t getMapMutex() const { return _mapMutex; };
-
-    /**
-     * @brief Get access to MapItems Vector of this Thread.
-     * @return MapItems Vector of this Thread.
-     */
-    MAP_ITEMS_VEC getMapItems() { return _mapItems; };
-
-    /**
-     * @brief Inserts the given item produced during the Map procedure into
-     *        this Threads MapItems Vector.
-     * @param mapItem The item to insert.
-     */
-    void insertItem(const MAP_ITEM &mapItem);
-
-    /**
-     * @brief Clear all items from the MapItems Vector
-     */
-    void clearItems() { _mapItems.clear(); };
-
-    /**
-     * @brief Return the empty status of the MapItems Vector.
-     * @return true if empty, false otherwise.
-     */
-    bool isItemsEmpty() const { return _mapItems.empty(); };
-
-private:
-    /**
      * @brief A Vector of items which produced by this Thread while using Map.
      */
-    MAP_ITEMS_VEC _mapItems;
+    MAP_ITEMS_VEC mapItems;
 
     /**
      * @brief Mutex for the MapItems Vector.
      */
-    pthread_mutex_t _mapMutex;
+    pthread_mutex_t mapMutex;
+
 };
 
 
