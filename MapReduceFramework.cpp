@@ -1,14 +1,10 @@
 // TODO: Valgrind
 // TODO: README
 // TODO: Makefile
-// TODO: Implement Log File.
 // TODO: SET CHUNK SIZE TO 10.
-// TODO: Check Destructors for the Threads.
 // TODO: Split to helper functions.
 // TODO: Check empty input. and check if threads should be created.
 // TODO: Add '.' to the log name.
-// TODO: Flag for Emit2 before semaphore post.
-// TODO: Fix Changes of mutex and check all error.
 // TODO: Fix the Shuffle.
 
 /**
@@ -115,6 +111,12 @@
 #define PTHREAD_MUTEX_UNLOCK_NAME "pthread_mutex_unlock"
 
 /**
+ * @def PTHREAD_MUTEX_INIT_NAME "pthread_mutex_init"
+ * @brief A Macro that sets function name for pthread_mutex_init.
+ */
+#define PTHREAD_MUTEX_INIT_NAME "pthread_mutex_init"
+
+/**
  * @def PTHREAD_MUTEX_DESTROY_NAME "pthread_mutex_destroy"
  * @brief A Macro that sets function name for pthread_mutex_destroy.
  */
@@ -155,6 +157,24 @@
  * @brief A Macro that sets the name of the Log File.
  */
 #define LOG_FILE_NAME "MapReduceFramework.log"
+
+/**
+ * @def LOG_MAP "ExecMap"
+ * @brief A Macro that sets the name of the Map Thread for the Log File.
+ */
+#define LOG_MAP "ExecMap"
+
+/**
+ * @def LOG_SHUFFLE "Shuffle"
+ * @brief A Macro that sets the name of the Shuffle Thread for the Log File.
+ */
+#define LOG_SHUFFLE "Shuffle"
+
+/**
+ * @def LOG_REDUCE "ExecReduce"
+ * @brief A Macro that sets the name of the Reduce Thread for the Log File.
+ */
+#define LOG_REDUCE "ExecReduce"
 
 
 /*-----=  Type Definitions  =-----*/
@@ -241,7 +261,7 @@ SHUFFLE_ITEMS shuffleItems;
  * @brief The shared index in the input items.
  *        This index shared by the Map Threads.
  */
-unsigned int currentInputIndex = INITIAL_INPUT_INDEX;
+unsigned int currentInputIndex;
 
 /**
  * @brief The shared iterator in the shuffle items.
@@ -254,7 +274,9 @@ auto currentShuffleIterator = shuffleItems.begin();
  */
 bool autoDeleteV2K2Flag;
 
-// TODO: Doxygen.
+/**
+ * @brief The flag which indicates that all Map Threads finished their job.
+ */
 bool mapsDone;
 
 /**
@@ -286,7 +308,9 @@ pthread_mutex_t shuffleIteratorMutex;
  */
 pthread_mutex_t logMutex;
 
-// TODO: Doxygen.
+/**
+ * @brief Mutex for the Map Done flag.
+ */
 pthread_mutex_t mapsDoneMutex;
 
 /**
@@ -315,7 +339,7 @@ static void errorProcedure(const char *functionName)
 
 
 /**
- * @brief Initilize the Log File and write the opening line in it.
+ * @brief Initialize the Log File and write the opening line in it.
  * @param multiThreadLevel
  */
 static void initLogFile(const int multiThreadLevel)
@@ -463,7 +487,7 @@ static void *execMap(void *arg)
             {
                 errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
             }
-            logThreadTerminate("ExecMap");
+            logThreadTerminate(LOG_MAP);
             if (pthread_mutex_unlock(&logMutex))
             {
                 errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
@@ -480,6 +504,7 @@ static void *execMap(void *arg)
             mapReduceDriver->Map(inputItems[i].first, inputItems[i].second);
         }
 
+        // TODO: Check. can wake up even if Emit2 did not happened.
         // Indicate Shuffle that there are items to shuffle.
         if (sem_post(&shuffleSemaphore))
         {
@@ -515,7 +540,20 @@ static void *shuffle(void *arg)
         }
         if (mapsDone)
         {
+            // TODO: THIS.
+            // If all Map Threads finished their jobs then we iterate
+            // all the containers of each Thread and shuffle it.
             if (pthread_mutex_unlock(&mapsDoneMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+            }
+
+            if (pthread_mutex_lock(&logMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+            }
+            logThreadTerminate(LOG_SHUFFLE);
+            if (pthread_mutex_unlock(&logMutex))
             {
                 errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
             }
@@ -526,7 +564,7 @@ static void *shuffle(void *arg)
             errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
         }
 
-        // Wait for items to work with.
+        // If not all Map Threads are done we wait for items to work with.
         if (sem_wait(&shuffleSemaphore))
         {
             errorProcedure(SEM_WAIT_NAME);
@@ -641,7 +679,7 @@ static void *execReduce(void *arg)
             {
                 errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
             }
-            logThreadTerminate("ExecReduce");
+            logThreadTerminate(LOG_REDUCE);
             if (pthread_mutex_unlock(&logMutex))
             {
                 errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
@@ -667,11 +705,6 @@ static void *execReduce(void *arg)
  */
 static void setupShuffleThread(threadRoutine routine)
 {
-    // Shuffle Thread creation and Semaphore initialization.
-    if (sem_init(&shuffleSemaphore, false, SHUFFLE_SEMAPHORE_VALUE))
-    {
-        errorProcedure(SEM_INIT_NAME);
-    }
     if (pthread_create(&shuffleThread.thread, NULL, routine, NULL))
     {
         errorProcedure(PTHREAD_CREATE_NAME);
@@ -680,7 +713,7 @@ static void setupShuffleThread(threadRoutine routine)
     {
         errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
     }
-    logThreadCreate("Shuffle");
+    logThreadCreate(LOG_SHUFFLE);
     if (pthread_mutex_unlock(&logMutex))
     {
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
@@ -716,7 +749,7 @@ static void setupMapThreads(int const multiThreadLevel, threadRoutine routine)
         {
             errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
         }
-        logThreadCreate("ExecMap");
+        logThreadCreate(LOG_MAP);
         if (pthread_mutex_unlock(&logMutex))
         {
             errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
@@ -762,7 +795,7 @@ static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine
         {
             errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
         }
-        logThreadCreate("ExecReduce");
+        logThreadCreate(LOG_REDUCE);
         if (pthread_mutex_unlock(&logMutex))
         {
             errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
@@ -774,6 +807,91 @@ static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine
     {
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
+}
+
+
+/*-----=  Framework Initialization Functions  =-----*/
+
+
+/**
+ * @brief Initialize all Mutex of this Framework.
+ */
+static void initAllMutex()
+{
+    if (pthread_mutex_init(&threadSpawnMutex, NULL))
+    {
+        errorProcedure(PTHREAD_MUTEX_INIT_NAME);
+    }
+
+    if (pthread_mutex_init(&inputIndexMutex, NULL))
+    {
+        errorProcedure(PTHREAD_MUTEX_INIT_NAME);
+    }
+
+    if (pthread_mutex_init(&shuffleIteratorMutex, NULL))
+    {
+        errorProcedure(PTHREAD_MUTEX_INIT_NAME);
+    }
+
+    if (pthread_mutex_init(&logMutex, NULL))
+    {
+        errorProcedure(PTHREAD_MUTEX_INIT_NAME);
+    }
+
+    if (pthread_mutex_init(&mapsDoneMutex, NULL))
+    {
+        errorProcedure(PTHREAD_MUTEX_INIT_NAME);
+    }
+
+    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
+    {
+        if (pthread_mutex_init(&i->mapMutex, NULL))
+        {
+            errorProcedure(PTHREAD_MUTEX_INIT_NAME);
+        }
+    }
+}
+
+/**
+ * @brief Initialize all Semaphores of this Framework.
+ */
+static void initAllSemaphores()
+{
+    if (sem_init(&shuffleSemaphore, false, SHUFFLE_SEMAPHORE_VALUE))
+    {
+        errorProcedure(SEM_INIT_NAME);
+    }
+}
+
+/**
+ * @brief Initialize all the Data required for this Framework run.
+ * @param mapReduce The MapReduce object which holds MapReduce implementation.
+ * @param itemsVec The input to perform Map & Reduce on.
+ * @param multiThreadLevel The number of Threads to work with.
+ * @param autoDeleteV2K2 A flag indicates if the K2V2 items resources should
+ *                       be freed by the Framework.
+ */
+static void setupFrameworkData(MapReduceBase& mapReduce, IN_ITEMS_VEC& itemsVec,
+                               int multiThreadLevel, bool autoDeleteV2K2)
+{
+    // Initialize the Log File.
+    initLogFile(multiThreadLevel);
+
+    // Initialize all the shared data.
+    mapThreads = MapThreadsVector();
+    shuffleThread = Thread();
+    reduceThreads = ReduceThreadsVector();
+    mapReduceDriver = &mapReduce;
+    inputItems = itemsVec;
+    shuffleItems = SHUFFLE_ITEMS();
+    currentInputIndex = INITIAL_INPUT_INDEX;
+    currentShuffleIterator = shuffleItems.begin();
+    autoDeleteV2K2Flag = autoDeleteV2K2;
+    mapsDone = false;
+
+    // Init Mutex & Semaphore.
+    initAllMutex();
+    initAllSemaphores();
 }
 
 
@@ -996,28 +1114,13 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     timeval startReduce, endReduce;
 
     // Start Measuring the time of Map & Shuffle.
-    if (gettimeofday(&startMapShuffle, nullptr))
+    if (gettimeofday(&startMapShuffle, NULL))
     {
         errorProcedure(GETTIMEOFDAY_NAME);
     }
 
-    initLogFile(multiThreadLevel);
-
-    mapReduceDriver = &mapReduce;  // Set the MapReduce specific implementation.
-    inputItems = itemsVec;  // Set the Input Items.
-    autoDeleteV2K2Flag = autoDeleteV2K2;  // Set the auto delete flag.
-    mapsDone = false;
-
-    pthread_mutex_init(&threadSpawnMutex, nullptr);
-    pthread_mutex_init(&inputIndexMutex, nullptr);
-    pthread_mutex_init(&shuffleIteratorMutex, nullptr);
-    pthread_mutex_init(&logMutex, nullptr);
-    pthread_mutex_init(&mapsDoneMutex, nullptr);
-
-    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
-    {
-        pthread_mutex_init(&i->mapMutex, nullptr);
-    }
+    // Setup all the data for this current Framework process.
+    setupFrameworkData(mapReduce, itemsVec, multiThreadLevel, autoDeleteV2K2);
 
     // Spawn Threads for Map.
     setupMapThreads(multiThreadLevel, execMap);
@@ -1031,6 +1134,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         }
     }
 
+    // Mark that all Map Threads are done.
     if (pthread_mutex_lock(&mapsDoneMutex))
     {
         errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
@@ -1054,7 +1158,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     }
 
     // Stop Measuring the time of Map & Shuffle.
-    if (gettimeofday(&endMapShuffle, nullptr))
+    if (gettimeofday(&endMapShuffle, NULL))
     {
         errorProcedure(GETTIMEOFDAY_NAME);
     }
@@ -1066,7 +1170,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     currentShuffleIterator = shuffleItems.begin();
 
     // Start Measuring the time of Map & Shuffle.
-    if (gettimeofday(&startReduce, nullptr))
+    if (gettimeofday(&startReduce, NULL))
     {
         errorProcedure(GETTIMEOFDAY_NAME);
     }
