@@ -53,6 +53,11 @@ public:
      */
     pthread_mutex_t mapMutex;
 
+    /**
+     * @brief A flag for this Map Thread which indicates that it called Emit2.
+     */
+    bool emitted;
+
 };
 
 

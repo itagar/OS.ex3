@@ -1,9 +1,10 @@
-// TODO: Valgrind
 // TODO: README
-// TODO: Makefile
-// TODO: SET CHUNK SIZE TO 10.
 // TODO: Check empty input. and check if threads should be created.
-// TODO: Add '.' to the log name.
+// TODO: Check order of printing in Log File.
+// TODO: Maybe lock the Emitted flag.
+// TODO: When running many iterations I get bad_cast().
+// TODO: Helgrind
+
 
 /**
  * @file MapReduceFramework.cpp
@@ -46,13 +47,13 @@
  * @def MAP_CHUNK 10
  * @brief A Macro that sets the chunk size that the ExecMap will be applied.
  */
-#define MAP_CHUNK 2
+#define MAP_CHUNK 10
 
 /**
  * @def REDUCE_CHUNK_SIZE 10
  * @brief A Macro that sets the chunk size that the ExecReduce will be applied.
  */
-#define REDUCE_CHUNK 2
+#define REDUCE_CHUNK 10
 
 /**
  * @def SHUFFLE_SEMAPHORE_VALUE 0
@@ -71,6 +72,12 @@
 * @brief A Macro that sets the factor to convert seconds to nano-seconds.
 */
 # define SECONDS_TO_NANO_FACTOR 1000000000
+
+/**
+* @def EMIT2_INITIAL_FLAG false
+* @brief A Macro that sets the initial Emit2 flag of the Map Threads.
+*/
+# define EMIT2_INITIAL_FLAG false
 
 /**
  * @def ERROR_MESSAGE_PREFIX "MapReduceFramework Failure: "
@@ -151,10 +158,28 @@
 #define GETTIMEOFDAY_NAME "gettimeofday"
 
 /**
+ * @def LOCALTIME_NAME "localtime"
+ * @brief A Macro that sets function name for localtime.
+ */
+#define LOCALTIME_NAME "localtime"
+
+/**
+ * @def OPEN_NAME "open"
+ * @brief A Macro that sets function name for open.
+ */
+#define OPEN_NAME "open"
+
+/**
+ * @def CLOSE_NAME "close"
+ * @brief A Macro that sets function name for close.
+ */
+#define CLOSE_NAME "close"
+
+/**
  * @def LOG_FILE_NAME ".MapReduceFramework.log"
  * @brief A Macro that sets the name of the Log File.
  */
-#define LOG_FILE_NAME "MapReduceFramework.log"
+#define LOG_FILE_NAME ".MapReduceFramework.log"
 
 /**
  * @def LOG_MAP "ExecMap"
@@ -343,9 +368,14 @@ static void errorProcedure(const char *functionName)
 static void initLogFile(const int multiThreadLevel)
 {
     logFile.open(LOG_FILE_NAME, std::ios_base::app | std::ios_base::out);
+    if (logFile.fail())
+    {
+        errorProcedure(OPEN_NAME);
+    }
+
     logFile << "RunMapReduceFramework started with "
             << multiThreadLevel
-            << " threads\n";
+            << " threads" << std::endl;
 }
 
 /**
@@ -355,22 +385,28 @@ static void getTimeAndDate()
 {
     time_t now = time(0);
     tm *currentTime = localtime(&now);
+    if (!currentTime)
+    {
+        errorProcedure(LOCALTIME_NAME);
+    }
+    else
+    {
+        int day = currentTime->tm_mday;
+        int month = currentTime->tm_mon + 1;
+        int year = currentTime->tm_year + 1900;
 
-    int day = currentTime->tm_mday;
-    int month = currentTime->tm_mon + 1;
-    int year = currentTime->tm_year + 1900;
+        int hour = currentTime->tm_hour;
+        int min = currentTime->tm_min;
+        int sec = currentTime->tm_sec;
 
-    int hour = currentTime->tm_hour;
-    int min = currentTime->tm_min;
-    int sec = currentTime->tm_sec;
-
-    logFile << "[" << std::setfill('0') << std::setw(2) << day
-            << "." << std::setfill('0') << std::setw(2) << month
-            << "." << std::setfill('0') << std::setw(2) << year
-            << " " << std::setfill('0') << std::setw(2) << hour
-            << ":" << std::setfill('0') << std::setw(2) << min
-            << ":" << std::setfill('0') << std::setw(2) << sec
-            << "]";
+        logFile << "[" << std::setfill('0') << std::setw(2) << day
+                << "." << std::setfill('0') << std::setw(2) << month
+                << "." << std::setfill('0') << std::setw(2) << year
+                << " " << std::setfill('0') << std::setw(2) << hour
+                << ":" << std::setfill('0') << std::setw(2) << min
+                << ":" << std::setfill('0') << std::setw(2) << sec
+                << "]" << std::flush;
+    }
 }
 
 /**
@@ -379,9 +415,9 @@ static void getTimeAndDate()
  */
 static void logThreadCreate(const std::string &threadName)
 {
-    logFile << "Thread " << threadName << " created ";
+    logFile << "Thread " << threadName << " created " << std::flush;
     getTimeAndDate();
-    logFile << "\n";
+    logFile << std::endl;
 }
 
 /**
@@ -390,9 +426,9 @@ static void logThreadCreate(const std::string &threadName)
  */
 static void logThreadTerminate(const std::string &threadName)
 {
-    logFile << "Thread " << threadName << " terminated ";
+    logFile << "Thread " << threadName << " terminated " << std::flush;
     getTimeAndDate();
-    logFile << "\n";
+    logFile << std::endl;
 }
 
 /**
@@ -416,7 +452,8 @@ static double calculateTime(const timeval &start, const timeval &end)
  */
 static void logMapShuffleTime(const timeval &start, const timeval &end)
 {
-    logFile << "Map and Shuffle took " << calculateTime(start, end) << " ns\n";
+    logFile << "Map and Shuffle took " << calculateTime(start, end)
+            << " ns" << std::endl;
 }
 
 /**
@@ -426,7 +463,8 @@ static void logMapShuffleTime(const timeval &start, const timeval &end)
  */
 static void logReduceTime(const timeval &start, const timeval &end)
 {
-    logFile << "Reduce took " << calculateTime(start, end) << " ns\n";
+    logFile << "Reduce took " << calculateTime(start, end)
+            << " ns" << std::endl;
 }
 
 /**
@@ -434,8 +472,12 @@ static void logReduceTime(const timeval &start, const timeval &end)
  */
 static void finishLogFile()
 {
-    logFile << "RunMapReduceFramework finished\n";
+    logFile << "RunMapReduceFramework finished" << std::endl;
     logFile.close();
+    if (logFile.fail())
+    {
+        errorProcedure(CLOSE_NAME);
+    }
 }
 
 /**
@@ -521,6 +563,18 @@ static void *execMap(void *arg)
             pthread_exit(nullptr);
         }
 
+        pthread_t currentThread = pthread_self();
+        auto mapThreadIterator = mapThreads.begin();
+        for (; mapThreadIterator != mapThreads.end(); ++mapThreadIterator)
+        {
+            if (currentThread == mapThreadIterator->thread)
+            {
+                break;
+            }
+        }
+
+        mapThreadIterator->emitted = false;
+
         // Perform Map on the input chunk. If the chunk size is greater then the
         // remaining input items then we perform Map on all the remaining items.
         for (unsigned int i = startIndex;
@@ -530,11 +584,13 @@ static void *execMap(void *arg)
             mapReduceDriver->Map(inputItems[i].first, inputItems[i].second);
         }
 
-        // TODO: Check. can wake up even if Emit2 did not happened.
-        // Indicate Shuffle that there are items to shuffle.
-        if (sem_post(&shuffleSemaphore))
+        if (mapThreadIterator->emitted)
         {
-            errorProcedure(SEM_POST_NAME);
+            // Indicate Shuffle that there are items to shuffle.
+            if (sem_post(&shuffleSemaphore))
+            {
+                errorProcedure(SEM_POST_NAME);
+            }
         }
     }
 }
@@ -799,6 +855,7 @@ static void setupMapThreads(int const multiThreadLevel, threadRoutine routine)
             errorProcedure(PTHREAD_CREATE_NAME);
         }
         logWriteCreate(LOG_MAP);
+        i->emitted = EMIT2_INITIAL_FLAG;
     }
 
     // Create Shuffle Thread.
@@ -1087,6 +1144,8 @@ void Emit2(k2Base *k2, v2Base *v2)
     {
         if (currentThread == i->thread)
         {
+            i->emitted = true;
+
             // Attempt to lock this Thread MapItems Vector because it's
             // shared by this Thread and the Shuffle Thread.
             if (pthread_mutex_lock(&i->mapMutex))
