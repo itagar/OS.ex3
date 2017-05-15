@@ -1,9 +1,6 @@
 // TODO: README
-// TODO: Check empty input. and check if threads should be created.
-// TODO: Check order of printing in Log File.
-// TODO: Maybe lock the Emitted flag.
-// TODO: When running many iterations I get bad_cast().
 // TODO: Helgrind
+// TODO: When running many iterations I get bad_cast().
 
 
 /**
@@ -1259,9 +1256,6 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         errorProcedure(GETTIMEOFDAY_NAME);
     }
 
-    // Output to the Log File the elapsed time of Map & Shuffle.
-    logMapShuffleTime(startMapShuffle, endMapShuffle);
-
     // Set the Shuffle iterator to the container begin.
     currentShuffleIterator = shuffleItems.begin();
 
@@ -1293,11 +1287,11 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
 
     // Output to the Log File the elapsed time of Reduce.
     logReduceTime(startReduce, endReduce);
+    // Output to the Log File the elapsed time of Map & Shuffle.
+    logMapShuffleTime(startMapShuffle, endMapShuffle);
 
-    // Release all Resources.
+    // Release all Resources and produce output.
     releaseAllResources();
-
     finishLogFile();
-
     return frameworkOutput;
 }
