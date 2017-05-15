@@ -1,6 +1,7 @@
 // TODO: README
 // TODO: Helgrind
 // TODO: When running many iterations I get bad_cast().
+// TODO: Create a map from pthread_t to Thread/container.
 
 
 /**
@@ -597,86 +598,61 @@ static void *execMap(void *arg)
 
 
 /**
- * @brief Receive the items to shuffle from the given Map THread and store them
- *        in the given Vector.
- * @param itemsToShuffle The Vector to store the items to shuffle.
- * @param mapThread The Map Thread which holds the items to shuffle.
- */
-static void receiveItemsToShuffle(MAP_ITEMS_VEC &itemsToShuffle,
-                                  MapThread &mapThread)
-{
-    // Attempt to lock this Thread MapItems Vector because it's
-    // shared by this Thread and the Shuffle Thread.
-    if (pthread_mutex_lock(&mapThread.mapMutex))
-    {
-        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
-    }
-
-    // Absorb all the items from this Thread and clear it's Vector.
-    itemsToShuffle = mapThread.mapItems;
-    mapThread.mapItems.clear();
-
-    // Unlock this Thread MapItems Vector.
-    if (pthread_mutex_unlock(&mapThread.mapMutex))
-    {
-        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
-    }
-}
-
-/**
- * @brief Perform the shuffle of the items in the given Vector.
- * @param itemsToShuffle The Vector with the items to shuffle.
- */
-static void doTheShuffle(const MAP_ITEMS_VEC &itemsToShuffle)
-{
-    for (auto i = itemsToShuffle.begin(); i != itemsToShuffle.end(); ++i)
-    {
-        // Create the current item to shuffle.
-        MAP_ITEM item = std::make_pair(i->first, i->second);
-
-        // Search for the current K2 value in the Shuffle Map.
-        auto K2Iterator = shuffleItems.find(i->first);
-
-        // If the current Key is already in the Shuffle Map we just add it's
-        // value to the proper position in the container. If AutoDelete flag
-        // is true then we also need to release the resources of this
-        // specific K2 because we don't store it in the Shuffle Map.
-        if (K2Iterator != shuffleItems.end())
-        {
-            // Add the value to the existing K2 key.
-            K2Iterator->second.push_back(item.second);
-            // Release resources of the current unused K2 key.
-            if (autoDeleteV2K2Flag)
-            {
-                delete item.first;
-            }
-            continue;
-        }
-
-        // If the current Key is not in the Shuffle we add it with it's
-        // corresponding V2.
-        shuffleItems[item.first].push_back(item.second);
-    }
-}
-
-/**
  * @brief Perform the final shuffle. In this shuffle we perform shuffle
  *        on all the Map Threads.
  */
 static void finalShuffle()
 {
-    MAP_ITEMS_VEC itemsToShuffle;
+    MAP_ITEMS_VEC itemsToShuffle = MAP_ITEMS_VEC();
 
     // For each Thread check if it has some items to shuffle and shuffle them.
     for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
     {
+        // Attempt to lock this Thread MapItems Vector because it's
+        // shared by this Thread and the Shuffle Thread.
+        if (pthread_mutex_lock(&i->mapMutex))
+        {
+            errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+        }
         if (!(i->mapItems.empty()))
         {
-            receiveItemsToShuffle(itemsToShuffle, *i);
+            // Absorb all the items from this Thread and clear it's Vector.
+            itemsToShuffle.insert(itemsToShuffle.end(),
+                                  i->mapItems.begin(), i->mapItems.end());
+            i->mapItems.clear();
+        }
+        // Unlock this Thread MapItems Vector.
+        if (pthread_mutex_unlock(&i->mapMutex))
+        {
+            errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
         }
 
         // The Shuffle.
-        doTheShuffle(itemsToShuffle);
+        for (auto j = itemsToShuffle.begin(); j != itemsToShuffle.end(); ++j)
+        {
+            // Search for the current K2 value in the Shuffle Map.
+            auto K2Iterator = shuffleItems.find(j->first);
+
+            // If the current Key is already in the Shuffle Map we just add it's
+            // value to the proper position in the container. If AutoDelete flag
+            // is true then we also need to release the resources of this
+            // specific K2 because we don't store it in the Shuffle Map.
+            if (K2Iterator != shuffleItems.end())
+            {
+                // Add the value to the existing K2 key.
+                K2Iterator->second.push_back(j->second);
+                // Release resources of the current unused K2 key.
+                if (autoDeleteV2K2Flag)
+                {
+                    delete j->first;
+                }
+                continue;
+            }
+
+            // If the current Key is not in the Shuffle we add it with it's
+            // corresponding V2.
+            shuffleItems[j->first].push_back(j->second);
+        }
     }
 }
 
@@ -729,21 +705,64 @@ static void *shuffle(void *arg)
             errorProcedure(SEM_WAIT_NAME);
         }
 
-        MAP_ITEMS_VEC itemsToShuffle;
+        MAP_ITEMS_VEC itemsToShuffle = MAP_ITEMS_VEC();
 
         // Iterate through MapThreads and check which has a non-empty container.
         for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
         {
+            // Attempt to lock this Thread MapItems Vector because it's
+            // shared by this Thread and the Shuffle Thread.
+            if (pthread_mutex_lock(&i->mapMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+            }
             if (!(i->mapItems.empty()))
             {
                 // Found a Thread with items to shuffle.
-                receiveItemsToShuffle(itemsToShuffle, *i);
+                // Absorb all the items from this Thread and clear it's Vector.
+                itemsToShuffle.insert(itemsToShuffle.end(),
+                                      i->mapItems.begin(), i->mapItems.end());
+                i->mapItems.clear();
+                // Unlock this Thread MapItems Vector.
+                if (pthread_mutex_unlock(&i->mapMutex))
+                {
+                    errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+                }
                 break;
+            }
+            // Unlock this Thread MapItems Vector.
+            if (pthread_mutex_unlock(&i->mapMutex))
+            {
+                errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
             }
         }
 
         // The Shuffle.
-        doTheShuffle(itemsToShuffle);
+        for (auto i = itemsToShuffle.begin(); i != itemsToShuffle.end(); ++i)
+        {
+            // Search for the current K2 value in the Shuffle Map.
+            auto K2Iterator = shuffleItems.find(i->first);
+
+            // If the current Key is already in the Shuffle Map we just add it's
+            // value to the proper position in the container. If AutoDelete flag
+            // is true then we also need to release the resources of this
+            // specific K2 because we don't store it in the Shuffle Map.
+            if (K2Iterator != shuffleItems.end())
+            {
+                // Add the value to the existing K2 key.
+                K2Iterator->second.push_back(i->second);
+                // Release resources of the current unused K2 key.
+                if (autoDeleteV2K2Flag)
+                {
+                    delete i->first;
+                }
+                continue;
+            }
+
+            // If the current Key is not in the Shuffle we add it with it's
+            // corresponding V2.
+            shuffleItems[i->first].push_back(i->second);
+        }
     }
 }
 
@@ -853,6 +872,7 @@ static void setupMapThreads(int const multiThreadLevel, threadRoutine routine)
         }
         logWriteCreate(LOG_MAP);
         i->emitted = EMIT2_INITIAL_FLAG;
+        i->mapItems = MAP_ITEMS_VEC();
     }
 
     // Create Shuffle Thread.
@@ -891,6 +911,7 @@ static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine
             errorProcedure(PTHREAD_CREATE_NAME);
         }
         logWriteCreate(LOG_REDUCE);
+        i->reduceItems = OUT_ITEMS_VEC();
     }
 
     // Thread creation is done. Now the Threads can start run.
@@ -1004,17 +1025,6 @@ static bool sortPairs(const OUT_ITEM &lhs, const OUT_ITEM &rhs)
 }
 
 /**
- * @brief Absorb all the items from the given source and append it into the
- *        given destination.
- * @param dest The destination Vector.
- * @param src The source Vector.
- */
-static void absorbItems(OUT_ITEMS_VEC& dest, const OUT_ITEMS_VEC& src)
-{
-    dest.insert(dest.end(), src.begin(), src.end());
-}
-
-/**
  * @brief Create and finalize the final output of the Framework.
  *        This function receive all the output items from all of the Reduce
  *        Threads and merge it together into one final Vector. In addition
@@ -1029,7 +1039,8 @@ static OUT_ITEMS_VEC finalizeOutput()
     // it into the final output.
     for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
     {
-        absorbItems(outputItems, i->reduceItems);
+        outputItems.insert(outputItems.end(),
+                           i->reduceItems.begin(), i->reduceItems.end());
     }
 
     // Sort the output according to alphabet order.
@@ -1180,8 +1191,7 @@ void Emit3(k3Base *k3, v3Base *v3)
         if (currentThread == i->thread)
         {
             // Insert to this Thread the current values of the Reduce procedure.
-            OUT_ITEM reduceItem = std::make_pair(k3, v3);
-            i->reduceItems.push_back(reduceItem);
+            i->reduceItems.push_back(std::make_pair(k3, v3));
             return;
         }
     }
