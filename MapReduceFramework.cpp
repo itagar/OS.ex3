@@ -1,6 +1,3 @@
-// TODO: README
-// TODO: Helgrind
-
 /**
  * @file MapReduceFramework.cpp
  * @author Itai Tagar <itagar>
