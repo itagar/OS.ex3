@@ -508,7 +508,7 @@ int main(int argc, char* argv[])
         freeResources(input, output);
         return EXIT_SUCCESS;
     }
-    catch (std::bad_alloc &badAllocException)
+    catch (std::exception &exception)
     {
         // Free all resources.
         freeResources(input, output);

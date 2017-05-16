@@ -1,8 +1,5 @@
 // TODO: README
 // TODO: Helgrind
-// TODO: When running many iterations I get bad_cast().
-// TODO: Create a map from pthread_t to Thread/container.
-
 
 /**
  * @file MapReduceFramework.cpp
@@ -365,6 +362,11 @@ static void errorProcedure(const char *functionName)
  */
 static void initLogFile(const int multiThreadLevel)
 {
+    if (pthread_mutex_lock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+    }
+
     logFile.open(LOG_FILE_NAME, std::ios_base::app | std::ios_base::out);
     if (logFile.fail())
     {
@@ -374,6 +376,10 @@ static void initLogFile(const int multiThreadLevel)
     logFile << "RunMapReduceFramework started with "
             << multiThreadLevel
             << " threads" << std::endl;
+    if (pthread_mutex_unlock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+    }
 }
 
 /**
@@ -413,9 +419,17 @@ static void getTimeAndDate()
  */
 static void logThreadCreate(const std::string &threadName)
 {
+    if (pthread_mutex_lock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+    }
     logFile << "Thread " << threadName << " created " << std::flush;
     getTimeAndDate();
     logFile << std::endl;
+    if (pthread_mutex_unlock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+    }
 }
 
 /**
@@ -424,9 +438,17 @@ static void logThreadCreate(const std::string &threadName)
  */
 static void logThreadTerminate(const std::string &threadName)
 {
+    if (pthread_mutex_lock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+    }
     logFile << "Thread " << threadName << " terminated " << std::flush;
     getTimeAndDate();
     logFile << std::endl;
+    if (pthread_mutex_unlock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+    }
 }
 
 /**
@@ -450,8 +472,16 @@ static double calculateTime(const timeval &start, const timeval &end)
  */
 static void logMapShuffleTime(const timeval &start, const timeval &end)
 {
+    if (pthread_mutex_lock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+    }
     logFile << "Map and Shuffle took " << calculateTime(start, end)
             << " ns" << std::endl;
+    if (pthread_mutex_unlock(&logMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+    }
 }
 
 /**
@@ -461,35 +491,12 @@ static void logMapShuffleTime(const timeval &start, const timeval &end)
  */
 static void logReduceTime(const timeval &start, const timeval &end)
 {
-    logFile << "Reduce took " << calculateTime(start, end)
-            << " ns" << std::endl;
-}
-
-/**
- * @brief Writes to the Log file the final line and close the file stream.
- */
-static void finishLogFile()
-{
-    logFile << "RunMapReduceFramework finished" << std::endl;
-    logFile.close();
-    if (logFile.fail())
-    {
-        errorProcedure(CLOSE_NAME);
-    }
-}
-
-/**
- * @brief The procedure of writing to the Log the Thread creation which called
- *        by the Threads.
- * @param threadName The name of the created Thread.
- */
-static void logWriteCreate(const std::string &threadName)
-{
     if (pthread_mutex_lock(&logMutex))
     {
         errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
     }
-    logThreadCreate(threadName);
+    logFile << "Reduce took " << calculateTime(start, end)
+            << " ns" << std::endl;
     if (pthread_mutex_unlock(&logMutex))
     {
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
@@ -497,17 +504,20 @@ static void logWriteCreate(const std::string &threadName)
 }
 
 /**
- * @brief The procedure of writing to the Log the Thread termination which
- *        called by the Threads.
- * @param threadName The name of the terminated Thread.
+ * @brief Writes to the Log file the final line and close the file stream.
  */
-static void logWriteTerminate(const std::string &threadName)
+static void finishLogFile()
 {
     if (pthread_mutex_lock(&logMutex))
     {
         errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
     }
-    logThreadTerminate(threadName);
+    logFile << "RunMapReduceFramework finished" << std::endl;
+    logFile.close();
+    if (logFile.fail())
+    {
+        errorProcedure(CLOSE_NAME);
+    }
     if (pthread_mutex_unlock(&logMutex))
     {
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
@@ -557,10 +567,11 @@ static void *execMap(void *arg)
         // If the input is empty.
         if (startIndex >= inputSize)
         {
-            logWriteTerminate(LOG_MAP);
+            logThreadTerminate(LOG_MAP);
             pthread_exit(nullptr);
         }
 
+        // Set current Thread Emit flag to be false.
         pthread_t currentThread = pthread_self();
         auto mapThreadIterator = mapThreads.begin();
         for (; mapThreadIterator != mapThreads.end(); ++mapThreadIterator)
@@ -570,8 +581,7 @@ static void *execMap(void *arg)
                 break;
             }
         }
-
-        mapThreadIterator->emitted = false;
+        mapThreadIterator->emitted = EMIT2_INITIAL_FLAG;  // TODO: Check if mutex is required.
 
         // Perform Map on the input chunk. If the chunk size is greater then the
         // remaining input items then we perform Map on all the remaining items.
@@ -653,6 +663,40 @@ static void finalShuffle()
             // corresponding V2.
             shuffleItems[j->first].push_back(j->second);
         }
+        itemsToShuffle.clear();
+    }
+}
+
+/**
+ * @brief Perform the shuffle of the given item.
+ * @param k2 The K2 of the item to shuffle.
+ * @param v2 The V2 of the item to shuffle.
+ */
+static void doTheShuffle(k2Base* k2, v2Base* v2)
+{
+    // Search for the current K2 value in the Shuffle Map.
+    auto K2Iterator = shuffleItems.find(k2);
+
+    // If the current Key is already in the Shuffle Map we just add it's
+    // value to the proper position in the container. If AutoDelete flag
+    // is true then we also need to release the resources of this
+    // specific K2 because we don't store it in the Shuffle Map.
+    if (K2Iterator != shuffleItems.end())
+    {
+        // Add the value to the existing K2 key.
+        K2Iterator->second.push_back(v2);
+        // Release resources of the current unused K2 key.
+        if (autoDeleteV2K2Flag)
+        {
+            delete k2;
+        }
+    }
+    else
+    {
+        // If the current Key is not in the Shuffle we add it with it's
+        // corresponding V2.
+        shuffleItems[k2] = V2Vector();
+        shuffleItems[k2].push_back(v2);
     }
 }
 
@@ -673,30 +717,26 @@ static void *shuffle(void *arg)
         errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 
+    MAP_ITEMS_VEC itemsToShuffle = MAP_ITEMS_VEC();
+
     while (true)
     {
         if (pthread_mutex_lock(&mapsDoneMutex))
         {
             errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
         }
-        if (mapsDone)
-        {
-            // If all Map Threads finished their jobs then we iterate
-            // all the containers of each Thread and shuffle it.
-            if (pthread_mutex_unlock(&mapsDoneMutex))
-            {
-                errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
-            }
-
-            // Do the final Shuffle.
-            finalShuffle();
-
-            logWriteTerminate(LOG_SHUFFLE);
-            pthread_exit(nullptr);
-        }
+        bool finalRun = mapsDone;
         if (pthread_mutex_unlock(&mapsDoneMutex))
         {
             errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
+        }
+        if (finalRun)
+        {
+            // If all Map Threads finished their jobs then we iterate
+            // all the containers of each Thread and shuffle it.
+            finalShuffle();
+            logThreadTerminate(LOG_SHUFFLE);
+            pthread_exit(nullptr);
         }
 
         // If not all Map Threads are done we wait for items to work with.
@@ -704,8 +744,6 @@ static void *shuffle(void *arg)
         {
             errorProcedure(SEM_WAIT_NAME);
         }
-
-        MAP_ITEMS_VEC itemsToShuffle = MAP_ITEMS_VEC();
 
         // Iterate through MapThreads and check which has a non-empty container.
         for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
@@ -740,29 +778,9 @@ static void *shuffle(void *arg)
         // The Shuffle.
         for (auto i = itemsToShuffle.begin(); i != itemsToShuffle.end(); ++i)
         {
-            // Search for the current K2 value in the Shuffle Map.
-            auto K2Iterator = shuffleItems.find(i->first);
-
-            // If the current Key is already in the Shuffle Map we just add it's
-            // value to the proper position in the container. If AutoDelete flag
-            // is true then we also need to release the resources of this
-            // specific K2 because we don't store it in the Shuffle Map.
-            if (K2Iterator != shuffleItems.end())
-            {
-                // Add the value to the existing K2 key.
-                K2Iterator->second.push_back(i->second);
-                // Release resources of the current unused K2 key.
-                if (autoDeleteV2K2Flag)
-                {
-                    delete i->first;
-                }
-                continue;
-            }
-
-            // If the current Key is not in the Shuffle we add it with it's
-            // corresponding V2.
-            shuffleItems[i->first].push_back(i->second);
+            doTheShuffle(i->first, i->second);
         }
+        itemsToShuffle.clear();
     }
 }
 
@@ -816,7 +834,7 @@ static void *execReduce(void *arg)
         // If the vector is empty.
         if (startIterator == shuffleItems.end())
         {
-            logWriteTerminate(LOG_REDUCE);
+            logThreadTerminate(LOG_REDUCE);
             pthread_exit(nullptr);
         }
 
@@ -842,7 +860,7 @@ static void setupShuffleThread(threadRoutine routine)
     {
         errorProcedure(PTHREAD_CREATE_NAME);
     }
-    logWriteCreate(LOG_SHUFFLE);
+    logThreadCreate(LOG_SHUFFLE);
 }
 
 /**
@@ -866,13 +884,13 @@ static void setupMapThreads(int const multiThreadLevel, threadRoutine routine)
     // Create Threads.
     for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
     {
+        i->emitted = EMIT2_INITIAL_FLAG;
+        i->mapItems = MAP_ITEMS_VEC();
         if (pthread_create(&(i->thread), NULL, routine, NULL))
         {
             errorProcedure(PTHREAD_CREATE_NAME);
         }
-        logWriteCreate(LOG_MAP);
-        i->emitted = EMIT2_INITIAL_FLAG;
-        i->mapItems = MAP_ITEMS_VEC();
+        logThreadCreate(LOG_MAP);
     }
 
     // Create Shuffle Thread.
@@ -906,12 +924,12 @@ static void setupReduceThreads(int const multiThreadLevel, threadRoutine routine
     // Create Threads.
     for (auto i = reduceThreads.begin(); i != reduceThreads.end(); ++i)
     {
+        i->reduceItems = OUT_ITEMS_VEC();
         if (pthread_create(&(i->thread), NULL, routine, NULL))
         {
             errorProcedure(PTHREAD_CREATE_NAME);
         }
-        logWriteCreate(LOG_REDUCE);
-        i->reduceItems = OUT_ITEMS_VEC();
+        logThreadCreate(LOG_REDUCE);
     }
 
     // Thread creation is done. Now the Threads can start run.
@@ -986,6 +1004,10 @@ static void initAllSemaphores()
 static void setupFrameworkData(MapReduceBase& mapReduce, IN_ITEMS_VEC& itemsVec,
                                int multiThreadLevel, bool autoDeleteV2K2)
 {
+    // Init Mutex & Semaphore.
+    initAllMutex();
+    initAllSemaphores();
+
     // Initialize the Log File.
     initLogFile(multiThreadLevel);
 
@@ -1000,10 +1022,6 @@ static void setupFrameworkData(MapReduceBase& mapReduce, IN_ITEMS_VEC& itemsVec,
     currentShuffleIterator = shuffleItems.begin();
     autoDeleteV2K2Flag = autoDeleteV2K2;
     mapsDone = false;
-
-    // Init Mutex & Semaphore.
-    initAllMutex();
-    initAllSemaphores();
 }
 
 
@@ -1301,7 +1319,7 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
     logMapShuffleTime(startMapShuffle, endMapShuffle);
 
     // Release all Resources and produce output.
-    releaseAllResources();
     finishLogFile();
+    releaseAllResources();
     return frameworkOutput;
 }

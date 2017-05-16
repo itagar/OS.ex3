@@ -56,4 +56,14 @@ MyTest: MapReduceFramework MyTest.cpp
 	$(CXX) MyTest.o -L. MapReduceFramework.a -lpthread -o MyTest
 	./MyTest
 	-rm -vf *.o *.a MyTest
-	
+
+
+# Jona
+Jona: MapReduceFramework Search
+	mv MapReduceFramework.a ex_3_test_suite/Framework/
+	mv Search ex_3_test_suite/Test_496/
+	./ex_3_test_suite/compile_suite
+	./ex_3_test_suite/run_suite
+	./ex_3_test_suite/clean_suite
+	rm -vf ex_3_test_suite/Framework/MapReduceFramework.a
+	rm -vf ex_3_test_suite/Test_496/Search
