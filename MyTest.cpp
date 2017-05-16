@@ -71,7 +71,7 @@ public:
 int main(int argc, char *argv[])
 {
     int k = 0;
-    for ( ; k < 1000000; ++k)
+    for ( ; k < 10000; ++k)
     {
         std::srand(100000);
         int i;

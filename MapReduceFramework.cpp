@@ -581,7 +581,7 @@ static void *execMap(void *arg)
                 break;
             }
         }
-        mapThreadIterator->emitted = EMIT2_INITIAL_FLAG;  // TODO: Check if mutex is required.
+        mapThreadIterator->emitted = EMIT2_INITIAL_FLAG;
 
         // Perform Map on the input chunk. If the chunk size is greater then the
         // remaining input items then we perform Map on all the remaining items.
@@ -592,6 +592,7 @@ static void *execMap(void *arg)
             mapReduceDriver->Map(inputItems[i].first, inputItems[i].second);
         }
 
+        // If the current Map procedure called Emit we can wake the Shuffle.
         if (mapThreadIterator->emitted)
         {
             // Indicate Shuffle that there are items to shuffle.
@@ -608,62 +609,29 @@ static void *execMap(void *arg)
 
 
 /**
- * @brief Perform the final shuffle. In this shuffle we perform shuffle
- *        on all the Map Threads.
+ * @brief Receive the items to shuffle from the given Map THread and store them
+ *        in the given Vector.
+ * @param itemsToShuffle The Vector to store the items to shuffle.
+ * @param mapThread The Map Thread which holds the items to shuffle.
  */
-static void finalShuffle()
+static void receiveItemsToShuffle(MAP_ITEMS_VEC &itemsToShuffle,
+                                  MapThread &mapThread)
 {
-    MAP_ITEMS_VEC itemsToShuffle = MAP_ITEMS_VEC();
-
-    // For each Thread check if it has some items to shuffle and shuffle them.
-    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
+    // Attempt to lock this Thread MapItems Vector because it's
+    // shared by this Thread and the Shuffle Thread.
+    if (pthread_mutex_lock(&mapThread.mapMutex))
     {
-        // Attempt to lock this Thread MapItems Vector because it's
-        // shared by this Thread and the Shuffle Thread.
-        if (pthread_mutex_lock(&i->mapMutex))
-        {
-            errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
-        }
-        if (!(i->mapItems.empty()))
-        {
-            // Absorb all the items from this Thread and clear it's Vector.
-            itemsToShuffle.insert(itemsToShuffle.end(),
-                                  i->mapItems.begin(), i->mapItems.end());
-            i->mapItems.clear();
-        }
-        // Unlock this Thread MapItems Vector.
-        if (pthread_mutex_unlock(&i->mapMutex))
-        {
-            errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
-        }
+        errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
+    }
 
-        // The Shuffle.
-        for (auto j = itemsToShuffle.begin(); j != itemsToShuffle.end(); ++j)
-        {
-            // Search for the current K2 value in the Shuffle Map.
-            auto K2Iterator = shuffleItems.find(j->first);
+    // Absorb all the items from this Thread and clear it's Vector.
+    itemsToShuffle = mapThread.mapItems;
+    mapThread.mapItems.clear();
 
-            // If the current Key is already in the Shuffle Map we just add it's
-            // value to the proper position in the container. If AutoDelete flag
-            // is true then we also need to release the resources of this
-            // specific K2 because we don't store it in the Shuffle Map.
-            if (K2Iterator != shuffleItems.end())
-            {
-                // Add the value to the existing K2 key.
-                K2Iterator->second.push_back(j->second);
-                // Release resources of the current unused K2 key.
-                if (autoDeleteV2K2Flag)
-                {
-                    delete j->first;
-                }
-                continue;
-            }
-
-            // If the current Key is not in the Shuffle we add it with it's
-            // corresponding V2.
-            shuffleItems[j->first].push_back(j->second);
-        }
-        itemsToShuffle.clear();
+    // Unlock this Thread MapItems Vector.
+    if (pthread_mutex_unlock(&mapThread.mapMutex))
+    {
+        errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
     }
 }
 
@@ -697,6 +665,31 @@ static void doTheShuffle(k2Base* k2, v2Base* v2)
         // corresponding V2.
         shuffleItems[k2] = V2Vector();
         shuffleItems[k2].push_back(v2);
+    }
+}
+
+/**
+ * @brief Perform the final shuffle. In this shuffle we perform shuffle
+ *        on all the Map Threads.
+ */
+static void finalShuffle()
+{
+    MAP_ITEMS_VEC itemsToShuffle = MAP_ITEMS_VEC();
+
+    // For each Thread check if it has some items to shuffle and shuffle them.
+    for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
+    {
+        if (!(i->mapItems.empty()))
+        {
+            receiveItemsToShuffle(itemsToShuffle, *i);
+        }
+
+        // The Shuffle.
+        for (auto j = itemsToShuffle.begin(); j != itemsToShuffle.end(); ++j)
+        {
+            doTheShuffle(j->first, j->second);
+        }
+        itemsToShuffle.clear();
     }
 }
 
@@ -748,30 +741,11 @@ static void *shuffle(void *arg)
         // Iterate through MapThreads and check which has a non-empty container.
         for (auto i = mapThreads.begin(); i != mapThreads.end(); ++i)
         {
-            // Attempt to lock this Thread MapItems Vector because it's
-            // shared by this Thread and the Shuffle Thread.
-            if (pthread_mutex_lock(&i->mapMutex))
-            {
-                errorProcedure(PTHREAD_MUTEX_LOCK_NAME);
-            }
             if (!(i->mapItems.empty()))
             {
                 // Found a Thread with items to shuffle.
-                // Absorb all the items from this Thread and clear it's Vector.
-                itemsToShuffle.insert(itemsToShuffle.end(),
-                                      i->mapItems.begin(), i->mapItems.end());
-                i->mapItems.clear();
-                // Unlock this Thread MapItems Vector.
-                if (pthread_mutex_unlock(&i->mapMutex))
-                {
-                    errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
-                }
+                receiveItemsToShuffle(itemsToShuffle, *i);
                 break;
-            }
-            // Unlock this Thread MapItems Vector.
-            if (pthread_mutex_unlock(&i->mapMutex))
-            {
-                errorProcedure(PTHREAD_MUTEX_UNLOCK_NAME);
             }
         }
 

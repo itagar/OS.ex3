@@ -50,7 +50,7 @@ Helgrind: MapReduceFramework MyTest.cpp
 	-rm -vf *.o *.a Helgrind
 
 
-# Test
+# MyTest
 MyTest: MapReduceFramework MyTest.cpp
 	$(CXX) $(CXXFLAGS) MyTest.cpp -o MyTest.o
 	$(CXX) MyTest.o -L. MapReduceFramework.a -lpthread -o MyTest
@@ -60,10 +60,50 @@ MyTest: MapReduceFramework MyTest.cpp
 
 # Jona
 Jona: MapReduceFramework Search
+	./ex_3_test_suite/clean_suite	
 	mv MapReduceFramework.a ex_3_test_suite/Framework/
 	mv Search ex_3_test_suite/Test_496/
 	./ex_3_test_suite/compile_suite
 	./ex_3_test_suite/run_suite
+	./ex_3_test_suite/clean_suite
+	rm -vf ex_3_test_suite/Framework/MapReduceFramework.a
+	rm -vf ex_3_test_suite/Test_496/Search
+
+JonaStress: MapReduceFramework Search
+	./ex_3_test_suite/clean_suite
+	mv MapReduceFramework.a ex_3_test_suite/Framework/
+	mv Search ex_3_test_suite/Test_496/
+	./ex_3_test_suite/compile_suite	
+	./ex_3_test_suite/Test_496/stress
+	./ex_3_test_suite/clean_suite
+	rm -vf ex_3_test_suite/Framework/MapReduceFramework.a
+	rm -vf ex_3_test_suite/Test_496/Search
+
+JonaValgrind: MapReduceFramework Search
+	./ex_3_test_suite/clean_suite
+	mv MapReduceFramework.a ex_3_test_suite/Framework/
+	mv Search ex_3_test_suite/Test_496/
+	./ex_3_test_suite/compile_suite
+	./ex_3_test_suite/Test_496/runValgrind
+	rm -vf ex_3_test_suite/Framework/MapReduceFramework.a
+	rm -vf ex_3_test_suite/Test_496/Search
+
+JonaHelgrind: MapReduceFramework Search
+	./ex_3_test_suite/clean_suite	
+	mv MapReduceFramework.a ex_3_test_suite/Framework/
+	mv Search ex_3_test_suite/Test_496/
+	./ex_3_test_suite/compile_suite
+	valgrind --tool=helgrind ./ex_3_test_suite/run_suite
+	./ex_3_test_suite/clean_suite
+	rm -vf ex_3_test_suite/Framework/MapReduceFramework.a
+	rm -vf ex_3_test_suite/Test_496/Search
+	
+JonaStressHelgrind: MapReduceFramework Search
+	./ex_3_test_suite/clean_suite
+	mv MapReduceFramework.a ex_3_test_suite/Framework/
+	mv Search ex_3_test_suite/Test_496/
+	./ex_3_test_suite/compile_suite	
+	valgrind --tool=helgrind ./ex_3_test_suite/Test_496/stress
 	./ex_3_test_suite/clean_suite
 	rm -vf ex_3_test_suite/Framework/MapReduceFramework.a
 	rm -vf ex_3_test_suite/Test_496/Search
