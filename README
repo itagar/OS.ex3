@@ -39,7 +39,43 @@ Design of the Search program:
     information.
 
 Design of the Framework implementation:
-    Bla.
+    The Framework is supported by the Thread class which is a wrapper class
+    for the pthread_t object and has some useful data and functions in order
+    to maintain the Framework and the Threads more easily.
+    The Framework holds several shared data and the Threads containers are one of them.
+    For the Map and Reduce Threads I used a Vector which holds a MapThread/ReduceThread
+    for each Thread respectively. For every shared data there is a Mutex to maintain
+    concurrency.
+    While the Map procedure is running, each MapThread object has it's own
+    Vector of K2, V2 pairs and each Emit2 call is adding the values to the corresponding
+    Thread's Vector. The same goes for the ReduceThreads while using Emit3. When the
+    Shuffle Thread wants to do some shuffling it searches in the MapThreads Vector
+    for a MapThread which holds items in its Vector and shuffle it's item while clearing
+    it's Vector. All the Shuffle results are in a shared map which maps K2 to
+    V2 Vector. Using map allows more efficiency in run time.
+    The communication between Shuffle and Map is by a Semaphore which indicates
+    to the Shuffle when Emit2 occurred and it can wake up and shuffle. Some useful
+    flag is the flag indicates that all the MapThreads finished their work. In that
+    case we wake up the Shuffle one more time to clear and shuffle all the items
+    from all the MapThreads.
+    As I mentioned each MapThread holds it's own Vector of K2, V2. In addition
+    each MapThread holds a Mutex for this Vector. This Mutex is used for concurrency
+    between writing to the Vector by Map and between reading from the Vector by Shuffle
+    (and clearing it as well).
+    Reduce using the shared map created by Shuffle while maintaining a global
+    Iterator (which is locked by Mutex) which works the same as the global index
+    for the input items and the Map procedure.
+    When Reduce finished it's task, the main Thread then merges all the items
+    from all the ReduceThreads in one output Vector, sorts it and returns it.
+    When dealing with releasing the resources of K2, V2 I first checked inside the Shuffle
+    if a deletion is required. A deletion is required in the Shuffle if the current
+    K2 is already in the Shuffle map thus we append it's V2 to the already existing K2.
+    If this is the case (and autoDeleteV2K2 is true) then Shuffle frees it's memory.
+    Now in the main Thread that runs RunMapReduceFramework, we iterate through the
+    entire Shuffle map and release all the K2 keys with all the V2 in every
+    Vector of this K2. Working like this assures that all the K2 and V2 are freed because
+    all the V2 are never gets lost during the Framework process and for every K2 that
+    got lost we take care of it's memory in the Shuffle procedure.
 
 
 ANSWERS:
