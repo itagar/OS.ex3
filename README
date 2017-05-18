@@ -4,84 +4,88 @@ EX: 3
 
 
 FILES:
-	uthreads.cpp 	- The User-Thread Library implementation.
-	Thread.h 	- A class declaration for a Thread in the User-Thread Library.  
-	Thread.cpp 	- A class implementation for a Thread in the User-Thread Library.  
-	Makefile        - Makefile for this project.
-	README          - This file.
+	MapReduceFramework.cpp  - The MapReduce Framework implementation.
+	Thread.h                - A wrapper class for a Thread in the Framework.
+	MapThread.h             - A wrapper class for a Map Thread in the Framework.
+	ReduceThread.h          - A wrapper class for a Reduce Thread in the Framework.
+	Search.cpp              - The program which perform search using the Framework.
+	Makefile                - Makefile for this project.
+	README                  - This file.
 
 
 REMARKS:
-	No Remarks.
+Design of the Search program:
+    In the Search program I divided the work between the Map and Reduce as follows:
+    The Map function is given a directory and the substring and it then search
+    in the files in the given directory the substring. Map is calls Emit2 of every
+    file name in this directory which satisfies the filter condition (in our case is
+    that the name contains the substring). So the Map helps the Search program
+    to divide it's work on the user input into several tasks where each task
+    is dedicated to one argument (one directory path) from the program arguments.
+    The Reduce function is fed with a filename and a list of K2 values and for every
+    item in the list, it calls Emit3 with this file name. So Reduce helps the Search
+    program divide it's work to counting every file name occurrence in a single
+    Reduce progress.
+    As described, my implementation of K1 is a directory name and V1 is a substring.
+    The implementation of K2 is the file name, which emitted by Map while filtering
+    the directory (K1) using the substring (V1). As for V2, it does not have a
+    specific implementation because the whole use of the value is to serve as a
+    counter of appearances for each file name (K2). So every Emit2 will emit
+    the file name with a nullptr and when the Reduce phase will take action it will
+    merely count the size of the list of (V2) i.e. the number of nullptr items.
+    As for K3 this is also representing a file name which passed the filtering.
+    Again, for V3 the implementation was not required because the final output
+    of the Search program is printing the file names without any additional
+    information.
+
+Design of the Framework implementation:
+    Bla.
 
 
 ANSWERS:
+Theoretical Questions:
+    1. Bla.
 
-# The first step is to divide the work correctly between the Map and the Reduce
-functions. You are required to explain your design in the README file
+    2. Bla.
 
+    3.  a. Bla.
+        b. Bla.
+        c. Bla.
+        d. Bla.
+        e. Bla.
 
+    4. 	a. Stack:
+            - Kernel-Level Thread - The stack isn't shared between parent and it's child.
+			- User-Level Thread -   The stack isn't shared between parent and it's child.
+			- Process -             While all the parent's data is copied to the child procees
+                                    this is just a copy of it and they don't share the stack.
+		b. Heap:  
+            - Kernel-Level Thread - The heap is shared between parent and child.
+			- User-Level Thread -   The heap is shared between parent and child.
+            - Process -             While all the parent's data is copied to the child procees
+                                    this is just a copy of it and they don't share the heap.
+        c. Global Variables:
+            - Kernel-Level Thread - The global variables are shared between the parent
+                                    and it's child.
+            - User-Level Thread -   The global variables are shared between the parent
+                                    and it's child.
+            - Process -             While all the parent's data is copied to the child procees
+                                    this is just a copy of it and they don't share the
+                                    global variables.
 
-
-
-
-
-
-
-
-
-
-
-
-
-	Theoretical Questions:
-	1. 	One possible usage for User-Level Threads is the ability to implement on
-		every operating system, even if the operatingf system does not support 
-		threads. Moreover, we can implement User-Level Threads on platforms which
-		not include operating systems at all.
-		This is due to the fact that User-Level Threads are an implementation in
-		the program itself and have nothing to do with the operating system,
-		the operating system does not aware to the fact that there are several 
-		threads running and from it's point of view it is a single process that runs.
-		In contrast to Kernel-Level Threads which are handled by the operating system
-		and thus it must depend on it in order to run properly.
-		
-	2. 	One of the advantages of creating a process instead of creating a Kernel-Level 
-		Thread is that different processes are protected from each other because they 
-		don't share any resources (unlike threads which share memory and address space...)
-		this can prevent for example race condition which can appear when using threads.
-		Another advantage of process over threads is the fact that changes of the main 
-		thread affect the behavior of the other threads of the process while changes to 
-		the parent process do not affect it's child processes.
-		A disadvantage of process over threads is that process requires a lot overhead
-		and all operations requires the operating system to handle it (i.e. kernel trap).
-		For example creation of a new thread can be acheived more easily then creation 
-		of a new process. Same for switching between processes and threads.
-		Furthermore, if processes wish to communicate with each other they must use 
-		interprocess communication (IPC) while threads can communicate with each other directly
-		(that's because of the resources they share) like using 'wait()' or 'notify()'...
-		Another disadvantage (which we also saw that it can reflect an advantage in some
-		cases) is that a thread can control and affect other threads of the same process
-		while process can only control over it's child processes.
-
-	3. 	a.	Opened Shotwell (pid 15877).
-		b. 	Done.
-		c. 	First the keyboard sends interrupt to the Shell to write 'kill 15877' and
-			perform it by pressing Enter. When pressing Enter and receiving this interrupt
-			the system perform the command that appered in the Sell (in our case it is 
-			'kill 15877'). The user function 'kill' perform system call to the 
-			function 'kill(15877, SIGTERM)' (trap).
-
-	4.	Real Time is the regular timer that counts down as we know it from life (Wall-Clock).
-		Virtual Time is the time that count only the actual time in which the process was running.
-		We would like to use Real Time for example in some Flight Booking program which should
-		be synchronized with the real time in the world and it's clock count should be as
-		the real count.
-		We would like to use Virtual Time for programs like games that counts time passed in the
-		game itself but ignore all the time of the overhead which passed but the CPU didn't perform
-		any action and thus the game should not continue to count when there wasn't a real progress
-		in computation.
-		
-		
-		
-		
+    5. The difference between deadlock and livelock is that in deadlock there are two
+	or more threads/processes which hold some lock and wait for the lock of others and 
+	so each one is watining for the other in some cyclic waiting, hence locked. 
+	While in livelock the processes are locked, like in deadlock, the reason for this
+	is different. In livelock each process is constantly changing it's state in order
+	to assist the other processes to continue with their progress, so in livelock
+	everybody is trying to make everybody to run, thus not making any progress, 
+	and in deadlock each one is trying to make it's own process to run. As we mentioned 
+	in class, livelock is a state where everybody is too polite, and we can think of 
+	livelock as a situation of the processes trying to avoid in reaching a deadlock.
+	An example of deadlock is like in the Dining Philosophers where each philosopher
+	is holding one chopstick and attempts to hold the other chopstick, which is already
+	held by another philosopher.
+	An example of livelock is when two people attemp to get inside a room and get stuck
+	the entrance because each one is too polite and wait for the other to get inside
+	before him.
