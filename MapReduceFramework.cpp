@@ -1255,6 +1255,9 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
         errorProcedure(GETTIMEOFDAY_NAME);
     }
 
+    // Output to the Log File the elapsed time of Map & Shuffle.
+    logMapShuffleTime(startMapShuffle, endMapShuffle);
+
     // Set the Shuffle iterator to the container begin.
     currentShuffleIterator = shuffleItems.begin();
 
@@ -1286,8 +1289,6 @@ OUT_ITEMS_VEC RunMapReduceFramework(MapReduceBase& mapReduce,
 
     // Output to the Log File the elapsed time of Reduce.
     logReduceTime(startReduce, endReduce);
-    // Output to the Log File the elapsed time of Map & Shuffle.
-    logMapShuffleTime(startMapShuffle, endMapShuffle);
 
     // Release all Resources and produce output.
     finishLogFile();
