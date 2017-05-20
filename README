@@ -84,34 +84,90 @@ Theoretical Questions:
 
     2. Bla.
 
-    3.  a. Bla.
-        b. Bla.
-        c. Bla.
-        d. Bla.
-        e. Bla.
+    3.  a. Utilizing Multi-Cores:
+            - Nira -    Running a single process with a single thread can't help
+                        in Utilizing Multi-Cores.
+            - Moti -    Using POSIX is using Kernel-Level Threads which can help in
+                        Utilizing Multi-Cores.
+            - Danny -   Using our User-Level Threads Library run can't help in
+                        Utilizing Multi-Cores.
+            - Galit -   Can be Utilizing Multi-Cores while different processes will run
+                        on different cores.
+        b. The ability to create a sophisticated scheduler, based on internal data:
+            - Nira -    Running a single process with a single thread does not need a
+                        Scheduler at all.
+            - Moti -    Using POSIX will also determine the scheduling decisions by the
+                        operating system, therefore Moti can't create a
+                        sophisticated scheduler.
+            - Danny -   Using our User-Level Threads Library can give Danny the power to
+                        create a sophisticated scheduler, based on internal data.
+            - Galit -   If a scheduling decision will occur it will by by the operating
+                        system scheduler, therefore Galit can't create a
+                        sophisticated scheduler.
+        c. Communication time (between different threads/processes):
+            - Nira -    No threads/processes so no communication is done.
+            - Moti -    Using Kernel-Level Threads has more efficient communication time
+                        then Galit but less then Danny. That is because communication
+                        requires the operating system.
+            - Danny -   Using User-Level Threads has more efficient communication time
+                        then Galit and Danny.
+            - Galit -   Using processes has the worst communication time. That is because
+                        communication requires the operating system and using IPC
+                        (and as we saw it less efficient than threads).
+        d. Ability to progress while a certain thread/process is blocked:
+            - Nira -    If the process/threads is blocked, than Nira's whole run will
+                        be blocked.
+            - Moti -    If one of the threads is blocked it does not affect other threads or
+                        processes.
+            - Danny -   If one of the threads is blocked it does not affect other threads or
+                        processes. Also, in User-Level Threads if the main thread is
+                        blocked it doesn't block the entire process/program.
+                        Nevertheless if the process which holds the threads is blocked
+                        then all the threads inside it are blocked.
+            - Galit -   Each process is independent therefore blocking a process will not
+                        block other processes. Nevertheless a parent
+        e. Overall speed:
+            Depending on the system we can describe the overall speed.
+            - Nira -    If the system has only one core and/or can simulate only one core
+                        then Nira will have the best overall time because she avoid context
+                        switch and a lot of overhead.
+                        In other system specs with multi cores and hyper threading Nira
+                        will probably be the worst in overall time.
+            - Moti -    Kernel-Level Threads depends on the operating system and will have
+                        better overall time then Galit which uses processes. If the system
+                        is with multi cores then Moti has the advantage because Galit
+                        using processes and Danny can't use it's Library on the hardware.
+                        But if the system has hyper threading then Danny has advantage on
+                        Moti because User-Level Threads require no operting system and the
+                        context switch is much faster.
+            - Danny -   As mentioned on multi cores Danny can't be more efficient then Moti
+                        nor Galit.
+            - Galit -   As we mentioned, Galit will have advantage on multi core system
+                        but no better then Moti because the switch of threads is more
+                        efficient then of processes.
 
     4. 	a. Stack:
             - Kernel-Level Thread - The stack isn't shared between parent and it's child.
 			- User-Level Thread -   The stack isn't shared between parent and it's child.
-			- Process -             While all the parent's data is copied to the child procees
+			- Process -             While all the parent's data is copied to the child process
                                     this is just a copy of it and they don't share the stack.
 		b. Heap:  
             - Kernel-Level Thread - The heap is shared between parent and child.
 			- User-Level Thread -   The heap is shared between parent and child.
-            - Process -             While all the parent's data is copied to the child procees
+            - Process -             While all the parent's data is copied to the child process
                                     this is just a copy of it and they don't share the heap.
         c. Global Variables:
             - Kernel-Level Thread - The global variables are shared between the parent
                                     and it's child.
             - User-Level Thread -   The global variables are shared between the parent
                                     and it's child.
-            - Process -             While all the parent's data is copied to the child procees
+            - Process -             While all the parent's data is copied to the child process
                                     this is just a copy of it and they don't share the
                                     global variables.
 
     5. The difference between deadlock and livelock is that in deadlock there are two
 	or more threads/processes which hold some lock and wait for the lock of others and 
-	so each one is watining for the other in some cyclic waiting, hence locked. 
+	so each one is waiting for the other in some cyclic waiting, hence locked.
 	While in livelock the processes are locked, like in deadlock, the reason for this
 	is different. In livelock each process is constantly changing it's state in order
 	to assist the other processes to continue with their progress, so in livelock
@@ -122,6 +178,6 @@ Theoretical Questions:
 	An example of deadlock is like in the Dining Philosophers where each philosopher
 	is holding one chopstick and attempts to hold the other chopstick, which is already
 	held by another philosopher.
-	An example of livelock is when two people attemp to get inside a room and get stuck
+	An example of livelock is when two people attempt to get inside a room and get stuck
 	the entrance because each one is too polite and wait for the other to get inside
 	before him.
