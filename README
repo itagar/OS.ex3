@@ -80,9 +80,35 @@ Design of the Framework implementation:
 
 ANSWERS:
 Theoretical Questions:
-    1. Bla.
+    1. An alternative implementation using Conditional Variables described as follows:
+    Using pthread_cond_timedwait() when Map will signal to Shuffle.
 
-    2. Bla.
+    abstime = TIME_INTERVAL
+    mapsFlag = false
+
+    /** ExecMap **/
+    // Perform Map procedure and locking + unlocking the mutex for the shared container.
+    pthread_cond_signal(condVariable);
+    mapsFlag = true;
+
+    /** ExecShuffle **/
+    while (true)
+        if (!mapsFlag)
+            pthread_cond_timedwait(condVariable, mutex, abstime);
+        // Perform Map procedure and locking + unlocking the mutex for the shared container.
+
+    We could not use pthread_cond_wait() because there is the case when the last Map
+    has finished and thus all Map Threads have finished but Shuffle was during it's flow.
+    In that case the Shuffle may get stuck in waiting for the next signal but no Map Thread
+    will ever signal it to him, and so we use pthread_cond_timedwait().
+
+    2. On a system with which contains 8 cores but with no Hyper-Threading support the best
+    value of multiThreadLevel to optimize performance would be 7. That is because we will
+    create 7 Map threads + 1 Shuffle thread and will use all of our 8 cores simultaneously.
+    If we will use less then 7 multiThreadLevel then we will not take advantage of all of
+    the cores in the system and utilization will not be optimized. If we will use more
+    7 multiThreadLevel then there will be several threads that will have to wait for CPU
+    time and thus there will be threads that won't utilize CPU time to optimum.
 
     3.  a. Utilizing Multi-Cores:
             - Nira -    Running a single process with a single thread can't help
